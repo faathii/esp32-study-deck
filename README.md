@@ -1,5 +1,9 @@
 # 📚 ESP32 Study Deck — Estación de Estudio Inteligente
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-blue.svg)](https://www.espressif.com/)
+[![Touch: CST820 Capacitive](https://img.shields.io/badge/Touch-CST820%20Capacitive-brightgreen.svg)](#)
+
 Dispositivo de escritorio inteligente dedicado exclusivamente al enfoque, productividad, administración del tiempo de estudio y gamificación de hábitos académicos.
 
 Construido sobre la placa **Guition ESP32-2432S024** (variante *Cheap Yellow Display* de 2.4 pulgadas con **táctil capacitivo CST820**).
@@ -31,6 +35,8 @@ Construido sobre la placa **Guition ESP32-2432S024** (variante *Cheap Yellow Dis
 | **Audio / Tono** | SC8002B | `GPIO 26` | Control de tonos y beeps de aviso |
 | **MicroSD** | TF Slot | `CS: 5`, `MOSI: 23`, `SCK: 18`, `MISO: 19` | Bus VSPI dedicado |
 
+Consulta el desglose detallado en [docs/hardware_pinout.md](docs/hardware_pinout.md).
+
 ---
 
 ## 🎯 Funcionalidades Principales
@@ -59,9 +65,25 @@ Construido sobre la placa **Guition ESP32-2432S024** (variante *Cheap Yellow Dis
 
 ## 🚀 Estructura del Repositorio
 
-* `/test_hardware`: Sketch de diagnóstico inicial para verificar el correcto funcionamiento de pantalla, táctil capacitivo CST820, LED RGB, LDR y zumbador.
-* `/study_deck`: Firmware principal de la estación de estudio.
-* `PROYECTO_ESTUDIO.md`: Hoja de ruta completa y arquitectura del proyecto.
+Conforme a las mejores prácticas de código abierto:
+
+```text
+├── .github/              # Plantillas de Issues y Pull Requests
+├── docs/                 # Documentación técnica, esquemas y arquitectura
+│   ├── architecture.md
+│   ├── hardware_pinout.md
+│   └── README.md
+├── firmware/             # Código fuente de los firmwares
+│   ├── study_deck/       # Aplicación principal de la estación de estudio
+│   └── test_hardware/    # Diagnóstico y verificación de hardware
+├── tools/                # Scripts auxiliares y proxy de Google Apps Script
+├── CHANGELOG.md          # Historial de cambios siguiendo Keep a Changelog
+├── CODE_OF_CONDUCT.md    # Código de conducta para contribuyentes
+├── CONTRIBUTING.md       # Guía de contribución y estilo de código
+├── LICENSE               # Licencia de código abierto MIT
+├── PROYECTO_ESTUDIO.md   # Especificaciones funcionales y fases
+└── README.md             # Esta guía principal
+```
 
 ---
 
@@ -70,9 +92,15 @@ Construido sobre la placa **Guition ESP32-2432S024** (variante *Cheap Yellow Dis
 Compilado usando **Arduino CLI** con el núcleo oficial ESP32 de Espressif:
 
 ```bash
-# Compilar
-arduino-cli compile --fqbn esp32:esp32:esp32 ./test_hardware
+# Compilar test de hardware
+arduino-cli compile --fqbn esp32:esp32:esp32 ./firmware/test_hardware
 
-# Subir al dispositivo (ejemplo COM5)
-arduino-cli upload -p COM5 --fqbn esp32:esp32:esp32 ./test_hardware
+# Flashear al dispositivo (ejemplo puerto COM5)
+arduino-cli upload -p COM5 --fqbn esp32:esp32:esp32 ./firmware/test_hardware
 ```
+
+---
+
+## 📄 Licencia
+
+Este proyecto está distribuido bajo la licencia de código abierto **MIT**. Consulta el archivo [LICENSE](LICENSE) para más detalles.
