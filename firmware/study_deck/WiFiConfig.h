@@ -5,6 +5,18 @@
 #include <WiFi.h>
 #include <Preferences.h>
 
+#if __has_include("Secrets.h")
+#include "Secrets.h"
+#endif
+
+#ifndef SECRET_WIFI_PASS
+#define SECRET_WIFI_PASS ""
+#endif
+
+#ifndef SECRET_WIFI_SSID
+#define SECRET_WIFI_SSID ""
+#endif
+
 struct DiscoveredNetwork {
     String ssid;
     int32_t rssi;
@@ -28,6 +40,10 @@ public:
     String getSavedPassword();
     void saveCredentials(const String &ssid, const String &password);
     void clearCredentials();
+
+    // Valores privados por defecto de Secrets.h
+    String getDefaultPassword() const { return String(SECRET_WIFI_PASS); }
+    String getDefaultSSID() const { return String(SECRET_WIFI_SSID); }
 
     // Escaneo de redes
     int scanNetworks();
@@ -54,4 +70,3 @@ private:
 };
 
 #endif // WIFI_CONFIG_H
-

@@ -663,7 +663,7 @@ void loop() {
                     audio.playClick();
                     selectedSSID = wifi.getNetwork(selectedIdx).ssid;
                     currentView = VIEW_WIFI_KEYBOARD;
-                    keyboard.reset("Clave: " + selectedSSID, true, "");
+                    keyboard.reset("Clave: " + selectedSSID, true, wifi.getDefaultPassword());
                     keyboard.drawFull();
                 }
             } 

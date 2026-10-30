@@ -3,6 +3,15 @@
 void WiFiConfig::begin() {
     WiFi.mode(WIFI_STA);
     _prefs.begin("study_wifi", false);
+
+    // Si hay credenciales definidas en Secrets.h y no están en NVS, guardarlas y conectar
+    if (!hasSavedCredentials() && strlen(SECRET_WIFI_SSID) > 0 && strlen(SECRET_WIFI_PASS) > 0) {
+        saveCredentials(SECRET_WIFI_SSID, SECRET_WIFI_PASS);
+        startConnect(SECRET_WIFI_SSID, SECRET_WIFI_PASS);
+    } else if (hasSavedCredentials()) {
+        // Conexión automática con las credenciales guardadas en NVS
+        startConnect(getSavedSSID(), getSavedPassword());
+    }
 }
 
 bool WiFiConfig::hasSavedCredentials() {
@@ -80,4 +89,3 @@ WiFiConnectStatus WiFiConfig::checkConnectStatus() {
 void WiFiConfig::disconnect() {
     WiFi.disconnect();
 }
-

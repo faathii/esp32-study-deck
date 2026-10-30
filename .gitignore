@@ -19,5 +19,12 @@ desktop.ini
 __pycache__/
 node_modules/
 .env
+
+# Archivos de credenciales y secretos privados (NUNCA SUBIR A GIT)
+Secrets.h
 secrets.h
+PrivateConfig.h
 credentials.h
+*secrets*
+*Secrets*
+!Secrets.h.example
