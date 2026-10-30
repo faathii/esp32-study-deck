@@ -14,6 +14,7 @@
 #include "BatteryManager.h"
 #include "CalendarManager.h"
 #include "StorageManager.h"
+#include "WeatherManager.h"
 
 // Periféricos y controladores de hardware
 TFT_eSPI tft = TFT_eSPI();
@@ -29,6 +30,7 @@ FlashcardManager flashcards;
 BatteryManager battery(PIN_BATTERY);
 CalendarManager calendar;
 StorageManager storage;
+WeatherManager weather;
 
 // Estado de la interfaz (inicia en el Launcher estilo Android)
 AppView currentView = VIEW_HOME;
@@ -54,7 +56,7 @@ bool screenDimmed = false;
 void refreshCurrentView() {
     switch (currentView) {
         case VIEW_HOME:
-            ui.drawHomeScreen(pomodoro, taskMgr, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
+            ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness);
             break;
         case VIEW_POMODORO:
             ui.drawPomodoroView(pomodoro, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
@@ -66,7 +68,10 @@ void refreshCurrentView() {
             ui.drawFlashcardsView(flashcards, battery, wifi.isConnected());
             break;
         case VIEW_AGENDA:
-            ui.drawAgendaView(calendar, wifi, battery);
+            ui.drawAgendaView(calendar, wifi, battery, weather);
+            break;
+        case VIEW_NIGHT_CLOCK:
+            ui.drawNightClockView(battery, weather);
             break;
         case VIEW_SETTINGS:
             ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted(), timeoutMinutes);
@@ -89,7 +94,7 @@ void setup() {
     Serial.println("  ESTACION DE ESTUDIO INTELIGENTE - STUDY DECK");
     Serial.println("  Hardware: Guition ESP32-2432S024C (2.4\")");
     Serial.println("  Bateria: LiPo 5000 mAh 3.7V (18.5 Wh)");
-    Serial.println("  OS: Android App Launcher - 100% Funcional");
+    Serial.println("  Clima: Open-Meteo + Modo Reloj Nocturno");
     Serial.println("==============================================\n");
 
     // 1. Inicializar retroiluminación
@@ -106,24 +111,23 @@ void setup() {
     led.begin();
     led.setMode(LED_MODE_IDLE);
 
-    // 4. Inicializar almacenamiento MicroSD antes de flashcards
+    // 4. Inicializar MicroSD, Estudio, Agenda y Clima
     storage.begin();
-
-    // 5. Inicializar motores de estudio y agenda
     pomodoro.begin();
     taskMgr.begin();
     flashcards.begin();
     calendar.begin();
+    weather.begin();
 
-    // 6. Inicializar Wi-Fi
+    // 5. Inicializar Wi-Fi
     wifi.begin();
 
-    // 7. Inicializar pantalla táctil y dibujar Home Launcher
+    // 6. Inicializar pantalla táctil y dibujar Home Launcher
     ui.begin();
     touch.begin();
-    ui.drawHomeScreen(pomodoro, taskMgr, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
+    ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness);
 
-    // 8. Auto-conexión si hay credenciales guardadas en NVS
+    // 7. Auto-conexión si hay credenciales guardadas en NVS
     if (wifi.hasSavedCredentials()) {
         Serial.printf("[WiFi] Auto-conectando a '%s' guardada en NVS...\n", wifi.getSavedSSID().c_str());
         wifi.startConnect(wifi.getSavedSSID(), wifi.getSavedPassword());
@@ -131,14 +135,15 @@ void setup() {
 
     // Melodía de bienvenida
     audio.playStart();
-    Serial.println("[Sistema] Study Deck operativo.");
+    Serial.println("[Sistema] Study Deck listo.");
 }
 
 void loop() {
-    // 1. Actualización no bloqueante del LED RGB, Batería y Agenda
+    // 1. Actualización no bloqueante de periféricos y red
     led.update();
     battery.update();
     calendar.update();
+    weather.update(wifi.isConnected());
 
     // 2. Comprobar estado de conexión Wi-Fi en segundo plano
     if (currentView == VIEW_WIFI_CONNECTING) {
@@ -150,6 +155,7 @@ void loop() {
             
             // Sincronizar reloj por NTP (Hora peninsular España: UTC+1, 3600s daylight)
             configTime(3600, 3600, "pool.ntp.org", "time.nist.gov");
+            weather.forceRefresh(true);
             
             currentView = VIEW_WIFI_RESULT;
             connectionSuccess = true;
@@ -191,7 +197,7 @@ void loop() {
     }
 
     // 4. Modo de ahorro de batería / Atenuación por inactividad
-    if (timeoutMinutes > 0) {
+    if (timeoutMinutes > 0 && currentView != VIEW_NIGHT_CLOCK) {
         unsigned long maxIdleMs = (unsigned long)timeoutMinutes * 60000;
         if ((millis() - lastTouchTime > maxIdleMs) && !screenDimmed) {
             screenDimmed = true;
@@ -207,6 +213,16 @@ void loop() {
         if (screenDimmed) {
             screenDimmed = false;
             analogWrite(PIN_BACKLIGHT, currentBrightness);
+            lastTouchTime = millis();
+            return;
+        }
+
+        // Salir de Modo Reloj Nocturno al tocar
+        if (currentView == VIEW_NIGHT_CLOCK) {
+            audio.playClick();
+            currentView = VIEW_HOME;
+            analogWrite(PIN_BACKLIGHT, currentBrightness);
+            refreshCurrentView();
             lastTouchTime = millis();
             return;
         }
@@ -237,7 +253,7 @@ void loop() {
                     audio.playClick();
                     currentView = VIEW_FLASH;
                     refreshCurrentView();
-                } else if (appSelected == 4) { // 📅 Agenda & Exámenes
+                } else if (appSelected == 4) { // 📅 Agenda & Clima
                     audio.playClick();
                     currentView = VIEW_AGENDA;
                     refreshCurrentView();
@@ -315,7 +331,7 @@ void loop() {
                         break;
                 }
             } 
-            // --- VISTA 2: APLICACIÓN TAREAS TO-DO (100% REAL) ---
+            // --- VISTA 2: APLICACIÓN TAREAS TO-DO ---
             else if (currentView == VIEW_TODO) {
                 bool add = false, clear = false, back = false;
                 int delIdx = -1;
@@ -360,7 +376,7 @@ void loop() {
                     refreshCurrentView();
                 }
             }
-            // --- VISTA 3: APLICACIÓN FLASHCARDS (LEITNER 100% REAL) ---
+            // --- VISTA 3: APLICACIÓN FLASHCARDS ---
             else if (currentView == VIEW_FLASH) {
                 bool flipped = false, easy = false, hard = false, add = false, back = false;
                 if (ui.handleFlashcardTouch(touchX, touchY, &flipped, &easy, &hard, &add, &back)) {
@@ -388,7 +404,7 @@ void loop() {
                     }
                 }
             } 
-            // --- ENTRADA DE TEXTO PARA NUEVA FLASHCARD (PREGUNTA) ---
+            // --- ENTRADA DE TEXTO PARA FLASHCARD (PREGUNTA) ---
             else if (currentView == VIEW_KEYBOARD_CARD_Q) {
                 KeyAction kAction = keyboard.handleTouch(touchX, touchY);
                 if (kAction == KEY_ACTION_CHAR_TYPED || kAction == KEY_ACTION_DELETE) {
@@ -405,7 +421,7 @@ void loop() {
                     keyboard.drawFull();
                 }
             }
-            // --- ENTRADA DE TEXTO PARA NUEVA FLASHCARD (RESPUESTA) ---
+            // --- ENTRADA DE TEXTO PARA FLASHCARD (RESPUESTA) ---
             else if (currentView == VIEW_KEYBOARD_CARD_A) {
                 KeyAction kAction = keyboard.handleTouch(touchX, touchY);
                 if (kAction == KEY_ACTION_CHAR_TYPED || kAction == KEY_ACTION_DELETE) {
@@ -421,10 +437,10 @@ void loop() {
                     refreshCurrentView();
                 }
             }
-            // --- VISTA 4: APLICACIÓN AGENDA & RELOJ ---
+            // --- VISTA 4: APLICACIÓN AGENDA & RELOJ & CLIMA ---
             else if (currentView == VIEW_AGENDA) {
-                bool addExam = false, back = false;
-                if (ui.handleAgendaTouch(touchX, touchY, &addExam, &back)) {
+                bool addExam = false, nightMode = false, back = false;
+                if (ui.handleAgendaTouch(touchX, touchY, &addExam, &nightMode, &back)) {
                     if (back) {
                         audio.playClick();
                         currentView = VIEW_HOME;
@@ -434,10 +450,15 @@ void loop() {
                         currentView = VIEW_KEYBOARD_EXAM;
                         keyboard.reset("Nombre del examen/hito:", false, "");
                         keyboard.drawFull();
+                    } else if (nightMode) {
+                        audio.playClick();
+                        currentView = VIEW_NIGHT_CLOCK;
+                        analogWrite(PIN_BACKLIGHT, 25);
+                        ui.drawNightClockView(battery, weather);
                     }
                 }
             } 
-            // --- ENTRADA DE TEXTO PARA NUEVO EXAMEN ---
+            // --- ENTRADA DE TEXTO PARA EXAMEN ---
             else if (currentView == VIEW_KEYBOARD_EXAM) {
                 KeyAction kAction = keyboard.handleTouch(touchX, touchY);
                 if (kAction == KEY_ACTION_CHAR_TYPED || kAction == KEY_ACTION_DELETE) {
@@ -456,9 +477,9 @@ void loop() {
             // --- VISTA 5: APLICACIÓN AJUSTES DEL SISTEMA ---
             else if (currentView == VIEW_SETTINGS) {
                 bool toggleAuto = false, briDown = false, briUp = false;
-                bool toggleMute = false, timeoutToggle = false, openWifi = false, back = false;
+                bool toggleMute = false, timeoutToggle = false, nightClock = false, openWifi = false, back = false;
                 ui.handleSettingsTouch(touchX, touchY, &toggleAuto, &briDown, &briUp, 
-                                       &toggleMute, &timeoutToggle, &openWifi, &back);
+                                       &toggleMute, &timeoutToggle, &nightClock, &openWifi, &back);
 
                 if (back) {
                     audio.playClick();
@@ -484,13 +505,11 @@ void loop() {
                     audio.toggleMute();
                     if (!audio.isMuted()) audio.playClick();
                     ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted(), timeoutMinutes);
-                } else if (timeoutToggle) {
+                } else if (nightClock) {
                     audio.playClick();
-                    if (timeoutMinutes == 1) timeoutMinutes = 2;
-                    else if (timeoutMinutes == 2) timeoutMinutes = 5;
-                    else if (timeoutMinutes == 5) timeoutMinutes = 0;
-                    else timeoutMinutes = 1;
-                    ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted(), timeoutMinutes);
+                    currentView = VIEW_NIGHT_CLOCK;
+                    analogWrite(PIN_BACKLIGHT, 25);
+                    ui.drawNightClockView(battery, weather);
                 } else if (openWifi) {
                     audio.playClick();
                     currentView = VIEW_WIFI_SCAN;
@@ -573,19 +592,24 @@ void loop() {
         struct tm *t = localtime(&now);
         if (t->tm_min != lastHomeMin) {
             lastHomeMin = t->tm_min;
-            ui.drawHomeScreen(pomodoro, taskMgr, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
+            ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness);
         }
     } else if (currentView == VIEW_POMODORO) {
         ui.updatePomodoroTimer(pomodoro, battery, wifi.isConnected());
     } else if (currentView == VIEW_AGENDA) {
         if (millis() - lastClockUpdate >= 1000) {
             lastClockUpdate = millis();
-            ui.updateAgendaClock(calendar);
+            ui.updateAgendaClock(calendar, weather);
+        }
+    } else if (currentView == VIEW_NIGHT_CLOCK) {
+        if (millis() - lastClockUpdate >= 1000) {
+            lastClockUpdate = millis();
+            ui.updateNightClock(battery, weather);
         }
     }
 
     // 7. Sensor LDR y ajuste suave de retroiluminación cada 400 ms si autoBrightness está activo
-    if (autoBrightness && !screenDimmed && (millis() - lastLdrCheck >= 400)) {
+    if (autoBrightness && !screenDimmed && currentView != VIEW_NIGHT_CLOCK && (millis() - lastLdrCheck >= 400)) {
         lastLdrCheck = millis();
         currentLdr = analogRead(PIN_LDR);
 

@@ -7,7 +7,7 @@
 #define COLOR_CARD        0x18E3 // Tarjeta grafito
 #define COLOR_CARD_HL     0x2966 // Tarjeta activa
 
-// Colores temáticos de las 6 aplicaciones
+// Colores temáticos de las aplicaciones
 #define APP_COLOR_POMO    0xD164 // Rojo Coral
 #define APP_COLOR_TODO    0x2A9C // Azul Índigo
 #define APP_COLOR_FLASH   0xE4A2 // Naranja Ámbar
@@ -100,7 +100,7 @@ void UIManager::drawUnifiedStatusBar(const BatteryManager &battery, bool wifiCon
 }
 
 // ============================================================================
-// 1. PANTALLA DE INICIO (ANDROID LAUNCHER CON 6 CAJAS DE APLICACIÓN)
+// 1. PANTALLA DE INICIO (ANDROID LAUNCHER CON WIDGET DE CLIMA)
 // ============================================================================
 
 void UIManager::drawAppCard(int x, int y, int w, int h, uint16_t bgColor, const char *icon, const char *title, const char *subtitle) {
@@ -116,15 +116,26 @@ void UIManager::drawAppCard(int x, int y, int w, int h, uint16_t bgColor, const 
 }
 
 void UIManager::drawHomeScreen(const PomodoroEngine &engine, const TaskManager &tasks, 
-                            const BatteryManager &battery, bool wifiConnected, 
-                            bool audioMuted, bool autoBrightness) {
+                            const BatteryManager &battery, const WeatherManager &weather,
+                            bool wifiConnected, bool audioMuted, bool autoBrightness) {
     _tft.fillScreen(COLOR_BG);
 
     drawUnifiedStatusBar(battery, wifiConnected, audioMuted, autoBrightness, 
                          engine.getCompletedSessionsToday(), nullptr);
 
+    // Encabezado "APLICACIONES" a la izquierda y WIDGET DE CLIMA a la derecha
     _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
     _tft.drawString("APLICACIONES", 12, 30, 2);
+
+    if (weather.hasData()) {
+        _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_BG);
+        char wStr[32];
+        snprintf(wStr, sizeof(wStr), "%s: %.1f C", weather.getCityName().c_str(), weather.getTemperature());
+        _tft.drawRightString(wStr, 308, 30, 2);
+    } else if (wifiConnected) {
+        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_BG);
+        _tft.drawRightString("Clima: Conectando...", 308, 30, 1);
+    }
 
     char pomoSub[16];
     if (engine.isRunning()) {
@@ -152,7 +163,7 @@ void UIManager::drawHomeScreen(const PomodoroEngine &engine, const TaskManager &
     drawAppCard(216, 48, 94, 84, APP_COLOR_FLASH, "[?]", "Fichas", "Repaso");
 
     // FILA 2 (y: 140, h: 84)
-    drawAppCard(10, 140, 94, 84, APP_COLOR_AGENDA, "[#]", "Agenda", "Reloj/NTP");
+    drawAppCard(10, 140, 94, 84, APP_COLOR_AGENDA, "[#]", "Agenda", "Reloj/Clima");
     drawAppCard(113, 140, 94, 84, APP_COLOR_CONFIG, "[*]", "Ajustes", batSub);
     drawAppCard(216, 140, 94, 84, APP_COLOR_INFO, "[i]", "Info", "Deck OS");
 }
@@ -169,7 +180,7 @@ int UIManager::handleHomeTouch(int x, int y) {
     }
 
     if (y >= 138 && y <= 228) {
-        if (x >= 8 && x <= 106) return 4;   // AGENDA
+        if (x >= 8 && x <= 106) return 4;   // AGENDA & CLIMA
         if (x >= 111 && x <= 209) return 5; // AJUSTES
         if (x >= 214 && x <= 312) return 6; // INFO & STATS
     }
@@ -230,21 +241,18 @@ void UIManager::drawModeButtons(const PomodoroEngine &engine) {
     bool is50 = (engine.getFocusMinutes() == 50);
     bool is90 = (engine.getFocusMinutes() == 90);
 
-    // Botón 25 min (Clásico)
     uint16_t bg25 = is25 ? 0x21E7 : COLOR_CARD;
     _tft.fillRoundRect(15, 30, 85, 24, 4, bg25);
     _tft.drawRoundRect(15, 30, 85, 24, 4, is25 ? COLOR_IDLE_BLUE : 0x3186);
     _tft.setTextColor(is25 ? TFT_WHITE : COLOR_TEXT_MUTED, bg25);
     _tft.drawCentreString("25 min", 57, 34, 2);
 
-    // Botón 50 min (Profundo)
     uint16_t bg50 = is50 ? 0x21E7 : COLOR_CARD;
     _tft.fillRoundRect(117, 30, 85, 24, 4, bg50);
     _tft.drawRoundRect(117, 30, 85, 24, 4, is50 ? COLOR_IDLE_BLUE : 0x3186);
     _tft.setTextColor(is50 ? TFT_WHITE : COLOR_TEXT_MUTED, bg50);
     _tft.drawCentreString("50 min", 159, 34, 2);
 
-    // Botón 90 min (Ultradiano)
     uint16_t bg90 = is90 ? 0x21E7 : COLOR_CARD;
     _tft.fillRoundRect(220, 30, 85, 24, 4, bg90);
     _tft.drawRoundRect(220, 30, 85, 24, 4, is90 ? COLOR_IDLE_BLUE : 0x3186);
@@ -367,7 +375,6 @@ void UIManager::drawTodoView(const TaskManager &taskMgr, const BatteryManager &b
         _tft.fillRoundRect(12, cardY, 296, 28, 4, COLOR_CARD);
         _tft.drawRoundRect(12, cardY, 296, 28, 4, task.completed ? COLOR_BREAK_GREEN : 0x3186);
 
-        // Checkbox táctil
         _tft.fillRoundRect(18, cardY + 4, 20, 20, 3, task.completed ? COLOR_BREAK_GREEN : 0x10A2);
         _tft.drawRoundRect(18, cardY + 4, 20, 20, 3, TFT_WHITE);
         if (task.completed) {
@@ -375,7 +382,6 @@ void UIManager::drawTodoView(const TaskManager &taskMgr, const BatteryManager &b
             _tft.drawCentreString("V", 28, cardY + 6, 2);
         }
 
-        // Texto
         String txt = task.text;
         if (txt.length() > 24) txt = txt.substring(0, 22) + "...";
         _tft.setTextColor(task.completed ? COLOR_TEXT_MUTED : TFT_WHITE, COLOR_CARD);
@@ -385,12 +391,10 @@ void UIManager::drawTodoView(const TaskManager &taskMgr, const BatteryManager &b
             _tft.drawFastHLine(44, cardY + 14, txt.length() * 7, COLOR_TEXT_MUTED);
         }
 
-        // Botón [X] eliminar tarea
         _tft.setTextColor(COLOR_FOCUS_RED, COLOR_CARD);
         _tft.drawCentreString("x", 294, cardY + 6, 2);
     }
 
-    // Botonera inferior: [+ NUEVA TAREA] y [LIMPIAR HECHAS]
     _tft.fillRoundRect(12, 194, 142, 34, 5, 0x1A85);
     _tft.drawRoundRect(12, 194, 142, 34, 5, COLOR_IDLE_BLUE);
     _tft.setTextColor(TFT_WHITE, 0x1A85);
@@ -413,28 +417,23 @@ int UIManager::handleTodoTouch(int x, int y, bool *outAdd, bool *outClear, int *
         return -1;
     }
 
-    // Botón + NUEVA TAREA
     if (x >= 12 && x <= 154 && y >= 190 && y <= 235) {
         *outAdd = true;
         return -1;
     }
 
-    // Botón LIMPIAR HECHAS
     if (x >= 165 && x <= 308 && y >= 190 && y <= 235) {
         *outClear = true;
         return -1;
     }
 
-    // Toque en una tarea (o botón eliminar [x])
     for (int i = 0; i < 6; i++) {
         int cardY = 30 + i * 32;
         if (y >= cardY && y <= cardY + 28) {
-            // Zona del botón X (x >= 280)
             if (x >= 280 && x <= 310) {
                 *outDelete = i;
                 return -1;
             }
-            // Zona del checkbox o tarea
             if (x >= 12 && x < 280) {
                 return i;
             }
@@ -492,7 +491,6 @@ void UIManager::drawFlashcardsView(const FlashcardManager &flashcards, const Bat
         }
     }
 
-    // Botones de acción: DIFICIL | + NUEVA | FACIL
     _tft.fillRoundRect(12, 168, 92, 48, 6, COLOR_FOCUS_RED);
     _tft.drawRoundRect(12, 168, 92, 48, 6, TFT_WHITE);
     _tft.setTextColor(TFT_WHITE, COLOR_FOCUS_RED);
@@ -545,49 +543,60 @@ bool UIManager::handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEa
 }
 
 // ============================================================================
-// 5. APLICACIÓN AGENDA & RELOJ & EXÁMENES
+// 5. APLICACIÓN AGENDA & RELOJ & EXÁMENES & CLIMA
 // ============================================================================
 
-void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, const BatteryManager &battery) {
+void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
+                              const BatteryManager &battery, const WeatherManager &weather) {
     _tft.fillScreen(COLOR_BG);
-    drawUnifiedStatusBar(battery, wifi.isConnected(), false, true, 0, "AGENDA & RELOJ");
+    drawUnifiedStatusBar(battery, wifi.isConnected(), false, true, 0, "AGENDA & CLIMA");
 
-    updateAgendaClock(calendar);
+    updateAgendaClock(calendar, weather);
 
-    // Tarjeta Cuenta Regresiva de Exámenes
+    // 1. Tarjeta Clima y Temperatura (Open-Meteo) (y: 110..150)
+    _tft.fillRoundRect(12, 110, 296, 40, 5, COLOR_CARD);
+    _tft.drawRoundRect(12, 110, 296, 40, 5, COLOR_IDLE_BLUE);
+    _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
+    _tft.drawString("Clima actual (Open-Meteo):", 20, 114, 1);
+
+    if (weather.hasData()) {
+        char wLine[48];
+        snprintf(wLine, sizeof(wLine), "%s: %.1f C | %s | %d%% HR", 
+                 weather.getCityName().c_str(), weather.getTemperature(), 
+                 weather.getConditionText().c_str(), weather.getHumidity());
+        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
+        _tft.drawString(wLine, 20, 128, 2);
+    } else {
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+        _tft.drawString(wifi.isConnected() ? "Consultando estacion..." : "Conecta Wi-Fi para clima real", 20, 128, 2);
+    }
+
+    // 2. Tarjeta Cuenta Regresiva de Exámenes (y: 154..194)
     String examTitle;
     String examCountdown = calendar.getNextDeadlineCountdown(examTitle);
 
-    _tft.fillRoundRect(12, 118, 296, 42, 6, COLOR_CARD);
-    _tft.drawRoundRect(12, 118, 296, 42, 6, COLOR_PAUSE_AMBER);
+    _tft.fillRoundRect(12, 154, 296, 40, 5, COLOR_CARD);
+    _tft.drawRoundRect(12, 154, 296, 40, 5, COLOR_PAUSE_AMBER);
     _tft.setTextColor(COLOR_PAUSE_AMBER, COLOR_CARD);
-    _tft.drawString("Proximo Examen:", 22, 122, 2);
+    _tft.drawString("Proximo Examen:", 20, 158, 1);
     _tft.setTextColor(TFT_WHITE, COLOR_CARD);
-    _tft.drawString(examTitle, 22, 138, 2);
+    _tft.drawString(examTitle, 20, 172, 2);
     _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
-    _tft.drawRightString(examCountdown, 298, 138, 2);
+    _tft.drawRightString(examCountdown, 298, 172, 2);
 
-    // Tarjeta Estado de Red
-    _tft.fillRoundRect(12, 164, 296, 34, 6, COLOR_CARD);
-    _tft.drawRoundRect(12, 164, 296, 34, 6, 0x3186);
-    if (wifi.isConnected()) {
-        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
-        _tft.drawString("Wi-Fi NTP Sincronizado", 22, 172, 2);
-        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-        _tft.drawRightString(wifi.getLocalIP(), 298, 172, 2);
-    } else {
-        _tft.setTextColor(COLOR_PAUSE_AMBER, COLOR_CARD);
-        _tft.drawString("Modo Offline (Reloj interno)", 22, 172, 2);
-    }
-
-    // Botón Agregar Examen
-    _tft.fillRoundRect(75, 204, 170, 30, 5, 0x21E7);
-    _tft.drawRoundRect(75, 204, 170, 30, 5, TFT_WHITE);
+    // 3. Botonera inferior: [+ EXAMEN] y [🌙 MODO NOCHE]
+    _tft.fillRoundRect(12, 198, 142, 34, 5, 0x21E7);
+    _tft.drawRoundRect(12, 198, 142, 34, 5, TFT_WHITE);
     _tft.setTextColor(TFT_WHITE, 0x21E7);
-    _tft.drawCentreString("+ AGREGAR EXAMEN", 160, 210, 2);
+    _tft.drawCentreString("+ EXAMEN", 83, 207, 2);
+
+    _tft.fillRoundRect(166, 198, 142, 34, 5, 0x18E3);
+    _tft.drawRoundRect(166, 198, 142, 34, 5, COLOR_PAUSE_AMBER);
+    _tft.setTextColor(COLOR_PAUSE_AMBER, 0x18E3);
+    _tft.drawCentreString("RELOJ NOCTURNO", 237, 207, 2);
 }
 
-void UIManager::updateAgendaClock(CalendarManager &calendar) {
+void UIManager::updateAgendaClock(CalendarManager &calendar, const WeatherManager &weather) {
     time_t now = time(nullptr);
     struct tm *t = localtime(&now);
 
@@ -604,17 +613,18 @@ void UIManager::updateAgendaClock(CalendarManager &calendar) {
         snprintf(dateStr, sizeof(dateStr), "Conecta a Wi-Fi para hora exacta");
     }
 
-    _tft.fillRect(20, 28, 280, 52, COLOR_BG);
+    _tft.fillRect(20, 28, 280, 50, COLOR_BG);
     _tft.setTextColor(TFT_WHITE, COLOR_BG);
-    _tft.drawCentreString(timeStr, 160, 32, 7);
+    _tft.drawCentreString(timeStr, 160, 30, 7);
 
-    _tft.fillRect(20, 84, 280, 20, COLOR_BG);
+    _tft.fillRect(20, 80, 280, 22, COLOR_BG);
     _tft.setTextColor(TFT_GOLD, COLOR_BG);
-    _tft.drawCentreString(dateStr, 160, 86, 2);
+    _tft.drawCentreString(dateStr, 160, 82, 2);
 }
 
-bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outBack) {
+bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outNightMode, bool *outBack) {
     *outAddExam = false;
+    *outNightMode = false;
     *outBack = false;
 
     if (x >= 4 && x <= 64 && y >= 0 && y <= 24) {
@@ -622,9 +632,15 @@ bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outBack)
         return true;
     }
 
-    // Botón + AGREGAR EXAMEN
-    if (x >= 70 && x <= 250 && y >= 200 && y <= 238) {
+    // Botón + EXAMEN
+    if (x >= 12 && x <= 155 && y >= 194 && y <= 236) {
         *outAddExam = true;
+        return true;
+    }
+
+    // Botón RELOJ NOCTURNO
+    if (x >= 165 && x <= 308 && y >= 194 && y <= 236) {
+        *outNightMode = true;
         return true;
     }
 
@@ -632,7 +648,74 @@ bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outBack)
 }
 
 // ============================================================================
-// 6. APLICACIÓN AJUSTES DEL SISTEMA
+// 6. PANTALLA DEDICADA: MODO RELOJ NOCTURNO (NIGHT DESK CLOCK)
+// ============================================================================
+
+void UIManager::drawNightClockView(const BatteryManager &battery, const WeatherManager &weather) {
+    _tft.fillScreen(0x0000); // Negro absoluto estilo OLED
+
+    updateNightClock(battery, weather);
+
+    // Indicación sutil en la parte inferior
+    _tft.setTextColor(0x4208, 0x0000);
+    _tft.drawCentreString("[ Toca en cualquier lugar para salir ]", 160, 220, 1);
+}
+
+void UIManager::updateNightClock(const BatteryManager &battery, const WeatherManager &weather) {
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+
+    char timeStr[16];
+    char dateStr[36];
+
+    if (t->tm_year > 120) {
+        snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", t->tm_hour, t->tm_min, t->tm_sec);
+        const char *dias[7] = { "Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado" };
+        const char *meses[12] = { "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic" };
+        snprintf(dateStr, sizeof(dateStr), "%s, %d de %s", dias[t->tm_wday], t->tm_mday, meses[t->tm_mon]);
+    } else {
+        snprintf(timeStr, sizeof(timeStr), "Study Deck");
+        snprintf(dateStr, sizeof(dateStr), "Modo Reloj Nocturno");
+    }
+
+    // Reloj gigante en ámbar cálido tenue (0xFDA0)
+    _tft.fillRect(10, 36, 300, 68, 0x0000);
+    _tft.setTextColor(COLOR_PAUSE_AMBER, 0x0000);
+    _tft.drawCentreString(timeStr, 160, 42, 7);
+
+    // Fecha en tono ámbar suave
+    _tft.fillRect(10, 114, 300, 24, 0x0000);
+    _tft.setTextColor(0xC580, 0x0000);
+    _tft.drawCentreString(dateStr, 160, 118, 2);
+
+    // Línea de clima en modo nocturno
+    _tft.fillRect(10, 144, 300, 24, 0x0000);
+    if (weather.hasData()) {
+        char wBuf[48];
+        snprintf(wBuf, sizeof(wBuf), "%s %.1f C · %s", 
+                 weather.getCityName().c_str(), weather.getTemperature(), weather.getConditionText().c_str());
+        _tft.setTextColor(0x5AEB, 0x0000); // Azul tenue
+        _tft.drawCentreString(wBuf, 160, 148, 2);
+    } else {
+        _tft.setTextColor(0x4208, 0x0000);
+        _tft.drawCentreString("Ambiente Nocturno", 160, 148, 2);
+    }
+
+    // Estado de batería 5000mAh
+    _tft.fillRect(10, 174, 300, 24, 0x0000);
+    char batBuf[48];
+    snprintf(batBuf, sizeof(batBuf), "Bateria: %d%% (%s)", battery.getPercentage(), battery.getRuntimeString().c_str());
+    _tft.setTextColor(0x0482, 0x0000); // Verde oliva tenue
+    _tft.drawCentreString(batBuf, 160, 178, 2);
+}
+
+bool UIManager::handleNightClockTouch(int x, int y) {
+    // Cualquier pulsación sale del modo noche
+    return true;
+}
+
+// ============================================================================
+// 7. APLICACIÓN AJUSTES DEL SISTEMA
 // ============================================================================
 
 void UIManager::drawSettingsView(const WiFiConfig &wifi, const BatteryManager &battery, 
@@ -676,22 +759,19 @@ void UIManager::drawSettingsView(const WiFiConfig &wifi, const BatteryManager &b
     _tft.setTextColor(TFT_WHITE, ldrBg);
     _tft.drawCentreString(autoBrightness ? "Auto LDR" : "Manual", 249, 88, 2);
 
-    // 3. Tarjeta Sonido y Reposo (y: 124..166)
+    // 3. Tarjeta Sonido y Modo Noche (y: 124..166)
     _tft.fillRoundRect(12, 124, 296, 44, 5, COLOR_CARD);
     _tft.drawRoundRect(12, 124, 296, 44, 5, 0x3186);
     
-    // Toggle Sonido
     uint16_t soundBg = soundMuted ? COLOR_FOCUS_RED : COLOR_BREAK_GREEN;
     _tft.fillRoundRect(20, 130, 130, 30, 4, soundBg);
     _tft.setTextColor(TFT_WHITE, soundBg);
     _tft.drawCentreString(soundMuted ? "SILENCIO" : "SONIDO ON", 85, 136, 2);
 
-    // Toggle Reposo por inactividad
-    _tft.fillRoundRect(165, 130, 135, 30, 4, 0x21E7);
-    _tft.setTextColor(TFT_WHITE, 0x21E7);
-    char toStr[24];
-    snprintf(toStr, sizeof(toStr), "Reposo: %dm", timeoutMinutes);
-    _tft.drawCentreString(toStr, 232, 136, 2);
+    _tft.fillRoundRect(165, 130, 135, 30, 4, 0x18E3);
+    _tft.drawRoundRect(165, 130, 135, 30, 4, COLOR_PAUSE_AMBER);
+    _tft.setTextColor(COLOR_PAUSE_AMBER, 0x18E3);
+    _tft.drawCentreString("MODO NOCHE", 232, 136, 2);
 
     // 4. Tarjeta Wi-Fi (y: 172..218)
     _tft.fillRoundRect(12, 172, 296, 48, 5, COLOR_CARD);
@@ -709,12 +789,13 @@ void UIManager::drawSettingsView(const WiFiConfig &wifi, const BatteryManager &b
 }
 
 int UIManager::handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outBriDown, bool *outBriUp, 
-                                   bool *outToggleMute, bool *outTimeoutToggle, bool *outOpenWifi, bool *outBack) {
+                                   bool *outToggleMute, bool *outTimeoutToggle, bool *outNightClock, bool *outOpenWifi, bool *outBack) {
     *outToggleAuto = false;
     *outBriDown = false;
     *outBriUp = false;
     *outToggleMute = false;
     *outTimeoutToggle = false;
+    *outNightClock = false;
     *outOpenWifi = false;
     *outBack = false;
 
@@ -730,10 +811,10 @@ int UIManager::handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outB
         if (x >= 195 && x <= 305) { *outToggleAuto = true; return 1; }
     }
 
-    // Sonido y Reposo (y: 124..166)
+    // Sonido y Modo Noche (y: 124..166)
     if (y >= 124 && y <= 166) {
         if (x >= 18 && x <= 155) { *outToggleMute = true; return 2; }
-        if (x >= 160 && x <= 305) { *outTimeoutToggle = true; return 2; }
+        if (x >= 160 && x <= 305) { *outNightClock = true; return 2; }
     }
 
     // Wi-Fi (y: 172..218)
@@ -746,7 +827,7 @@ int UIManager::handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outB
 }
 
 // ============================================================================
-// 7. APLICACIÓN INFO & ESTADÍSTICAS & MICROSD
+// 8. APLICACIÓN INFO & ESTADÍSTICAS & MICROSD
 // ============================================================================
 
 void UIManager::drawInfoView(const BatteryManager &battery, StorageManager &storage, 
@@ -755,7 +836,6 @@ void UIManager::drawInfoView(const BatteryManager &battery, StorageManager &stor
     drawUnifiedStatusBar(battery, wifiConnected, false, true, 
                          pomodoro.getCompletedSessionsToday(), "INFO & STATS");
 
-    // Tarjeta Estadísticas de Estudio
     _tft.fillRoundRect(12, 30, 296, 54, 5, COLOR_CARD);
     _tft.drawRoundRect(12, 30, 296, 54, 5, COLOR_BREAK_GREEN);
     _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
@@ -768,7 +848,6 @@ void UIManager::drawInfoView(const BatteryManager &battery, StorageManager &stor
     _tft.setTextColor(TFT_WHITE, COLOR_CARD);
     _tft.drawString(statBuf, 20, 56, 2);
 
-    // Tarjeta Almacenamiento MicroSD
     _tft.fillRoundRect(12, 90, 296, 48, 5, COLOR_CARD);
     _tft.drawRoundRect(12, 90, 296, 48, 5, storage.isAvailable() ? COLOR_IDLE_BLUE : 0x3186);
     _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
@@ -784,7 +863,6 @@ void UIManager::drawInfoView(const BatteryManager &battery, StorageManager &stor
     }
     _tft.drawString(sdBuf, 20, 114, 1);
 
-    // Tarjeta Hardware y Batería
     _tft.fillRoundRect(12, 144, 296, 76, 5, COLOR_CARD);
     _tft.drawRoundRect(12, 144, 296, 76, 5, 0x3186);
     _tft.setTextColor(TFT_WHITE, COLOR_CARD);
@@ -797,7 +875,7 @@ void UIManager::drawInfoView(const BatteryManager &battery, StorageManager &stor
     _tft.drawString(hwBuf, 20, 172, 1);
 
     _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
-    _tft.drawString("Study Deck OS v1.0.0 - Codigo Abierto MIT", 20, 192, 2);
+    _tft.drawString("Study Deck OS v1.1.0 - Codigo Abierto MIT", 20, 192, 2);
 }
 
 bool UIManager::handleInfoTouch(int x, int y) {
