@@ -6,9 +6,14 @@
 #include "PomodoroEngine.h"
 #include "HardwareConfig.h"
 #include "WiFiConfig.h"
+#include "TaskManager.h"
+#include "FlashcardManager.h"
 
 enum AppView {
-    VIEW_POMODORO,
+    VIEW_POMODORO = 0,
+    VIEW_TODO     = 1,
+    VIEW_FLASH    = 2,
+    VIEW_AGENDA   = 3,
     VIEW_WIFI_SCAN,
     VIEW_WIFI_KEYBOARD,
     VIEW_WIFI_CONNECTING,
@@ -22,7 +27,8 @@ enum UIButtonAction {
     UI_ACTION_SKIP,
     UI_ACTION_SELECT_25,
     UI_ACTION_SELECT_50,
-    UI_ACTION_OPEN_WIFI
+    UI_ACTION_OPEN_WIFI,
+    UI_ACTION_SWITCH_TAB
 };
 
 class UIManager {
@@ -31,30 +37,44 @@ public:
 
     void begin();
     
-    // Vista Pomodoro
-    void fullRedraw(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
-    void updateTimerDisplay(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
-    UIButtonAction handleTouch(int x, int y);
+    // Vista 1: Pomodoro
+    void drawPomodoroView(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
+    void updatePomodoroTimer(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
+    UIButtonAction handlePomodoroTouch(int x, int y);
 
-    // Vista de Escaneo de Redes Wi-Fi
+    // Vista 2: Tareas To-Do
+    void drawTodoView(const TaskManager &taskMgr);
+    int handleTodoTouch(int x, int y, bool *outReset);
+
+    // Vista 3: Flashcards
+    void drawFlashcardsView(const FlashcardManager &flashcards);
+    bool handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEasy, bool *outHard);
+
+    // Vista 4: Agenda & Reloj NTP
+    void drawAgendaView(const WiFiConfig &wifi);
+    void updateAgendaClock();
+
+    // Barra de navegación inferior común
+    void drawBottomTabs(AppView currentTab);
+    int handleBottomTabsTouch(int x, int y);
+
+    // Subvistas de Wi-Fi
     void drawWiFiScanView(const WiFiConfig &wifi, bool scanning, int page = 0);
     int handleWiFiScanTouch(int x, int y, int netCount, int page, bool *outRescan, bool *outBack, bool *outNextPage);
-
-    // Vista de Conexión en progreso y Resultado
     void drawWiFiConnecting(const String &ssid);
     void drawWiFiResult(bool success, const String &info);
 
 private:
     TFT_eSPI &_tft;
 
-    // Estados previos para evitar parpadeos
+    // Estados previos
     uint32_t _lastRemainingSec = 0xFFFFFFFF;
     PomodoroState _lastState = (PomodoroState)0xFF;
     uint8_t _lastCycle = 0xFF;
     uint16_t _lastFocusMin = 0xFF;
     int _lastLdr = -1;
     bool _lastWifiStatus = false;
-    float _lastProgress = -1.0f;
+    int _lastSecClock = -1;
 
     void drawTopBar(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
     void drawModeButtons(const PomodoroEngine &engine);

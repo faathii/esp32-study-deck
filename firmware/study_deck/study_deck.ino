@@ -8,6 +8,8 @@
 #include "UIManager.h"
 #include "WiFiConfig.h"
 #include "KeyboardUI.h"
+#include "TaskManager.h"
+#include "FlashcardManager.h"
 
 // Instancias de periféricos y controladores
 TFT_eSPI tft = TFT_eSPI();
@@ -18,6 +20,8 @@ PomodoroEngine pomodoro;
 UIManager ui(tft);
 WiFiConfig wifi;
 KeyboardUI keyboard(tft);
+TaskManager taskMgr;
+FlashcardManager flashcards;
 
 // Estado de la aplicación
 AppView currentView = VIEW_POMODORO;
@@ -30,8 +34,28 @@ bool connectionSuccess = false;
 // Variables de control temporal
 unsigned long lastLdrCheck = 0;
 unsigned long lastTouchTime = 0;
+unsigned long lastClockUpdate = 0;
 int currentLdr = 2000;
 int currentBrightness = 220;
+
+void refreshCurrentView() {
+    switch (currentView) {
+        case VIEW_POMODORO:
+            ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
+            break;
+        case VIEW_TODO:
+            ui.drawTodoView(taskMgr);
+            break;
+        case VIEW_FLASH:
+            ui.drawFlashcardsView(flashcards);
+            break;
+        case VIEW_AGENDA:
+            ui.drawAgendaView(wifi);
+            break;
+        default:
+            break;
+    }
+}
 
 void setup() {
     Serial.begin(115200);
@@ -54,8 +78,10 @@ void setup() {
     led.begin();
     led.setMode(LED_MODE_IDLE);
 
-    // 4. Inicializar motor Pomodoro
+    // 4. Inicializar motores de estudio
     pomodoro.begin();
+    taskMgr.begin();
+    flashcards.begin();
 
     // 5. Inicializar subsistema Wi-Fi
     wifi.begin();
@@ -63,7 +89,7 @@ void setup() {
     // 6. Inicializar pantalla táctil y dibujar vista inicial
     ui.begin();
     touch.begin();
-    ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+    ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
 
     // 7. Auto-conexión si hay credenciales guardadas en NVS
     if (wifi.hasSavedCredentials()) {
@@ -77,7 +103,7 @@ void setup() {
 }
 
 void loop() {
-    // 1. Actualización no bloqueante del LED RGB (parpadeo en pausa)
+    // 1. Actualización no bloqueante del LED RGB
     led.update();
 
     // 2. Comprobar estado de conexión Wi-Fi en segundo plano
@@ -104,10 +130,9 @@ void loop() {
             resultStartTime = millis();
         }
     } else if (currentView == VIEW_WIFI_RESULT) {
-        // En resultado exitoso, volver automáticamente a Pomodoro tras 3 segundos
         if (connectionSuccess && (millis() - resultStartTime >= 3000)) {
             currentView = VIEW_POMODORO;
-            ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+            refreshCurrentView();
         }
     }
 
@@ -118,25 +143,59 @@ void loop() {
         audio.playWorkFinished();
         led.setMode(LED_MODE_BREAK);
         if (currentView == VIEW_POMODORO) {
-            ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+            ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
         }
     } else if (event == POMO_EVENT_BREAK_COMPLETE) {
         Serial.println("[Pomodoro] ¡Descanso finalizado! Volviendo al modo enfoque.");
         audio.playBreakFinished();
         led.setMode(LED_MODE_FOCUS);
         if (currentView == VIEW_POMODORO) {
-            ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+            ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
         }
     }
 
-    // 4. Lectura táctil según la vista activa
-    int touchX = -1, touchY = -1;
-    if (touch.getTouch(&touchX, &touchY)) {
+    // 4. Lectura táctil y de gestos
+    uint16_t rawX = 0, rawY = 0;
+    uint8_t gesture = GESTURE_NONE;
+    if (touch.getRawTouch(&rawX, &rawY, &gesture)) {
         if (millis() - lastTouchTime >= 220) {
             lastTouchTime = millis();
 
+            // Transformar a coordenadas horizontales (320x240)
+            int touchX = rawY;
+            int touchY = 240 - rawX;
+            if (touchX < 0) touchX = 0;
+            if (touchX >= 320) touchX = 319;
+            if (touchY < 0) touchY = 0;
+            if (touchY >= 240) touchY = 239;
+
+            // Soporte de gestos de deslizamiento entre pestañas principales (0..3)
+            if (currentView <= VIEW_AGENDA) {
+                if (gesture == GESTURE_SLIDE_LEFT) {
+                    audio.playClick();
+                    currentView = (AppView)(((int)currentView + 1) % 4);
+                    refreshCurrentView();
+                    return;
+                } else if (gesture == GESTURE_SLIDE_RIGHT) {
+                    audio.playClick();
+                    currentView = (AppView)(((int)currentView + 3) % 4);
+                    refreshCurrentView();
+                    return;
+                }
+
+                // Detección de toque en la barra de pestañas inferior (y >= 204)
+                int tabSelected = ui.handleBottomTabsTouch(touchX, touchY);
+                if (tabSelected >= 0 && tabSelected != (int)currentView) {
+                    audio.playClick();
+                    currentView = (AppView)tabSelected;
+                    refreshCurrentView();
+                    return;
+                }
+            }
+
+            // Gestión de toques según la vista activa
             if (currentView == VIEW_POMODORO) {
-                UIButtonAction action = ui.handleTouch(touchX, touchY);
+                UIButtonAction action = ui.handlePomodoroTouch(touchX, touchY);
                 switch (action) {
                     case UI_ACTION_OPEN_WIFI:
                         audio.playClick();
@@ -184,10 +243,44 @@ void loop() {
                         }
                         break;
 
-                    case UI_ACTION_NONE:
                     default:
                         break;
                 }
+            } 
+            else if (currentView == VIEW_TODO) {
+                bool resetTasks = false;
+                int taskIdx = ui.handleTodoTouch(touchX, touchY, &resetTasks);
+                if (resetTasks) {
+                    audio.playClick();
+                    taskMgr.resetToDefaults();
+                    ui.drawTodoView(taskMgr);
+                } else if (taskIdx >= 0) {
+                    audio.playClick();
+                    taskMgr.toggleTask(taskIdx);
+                    ui.drawTodoView(taskMgr);
+                }
+            } 
+            else if (currentView == VIEW_FLASH) {
+                bool flipped = false, easy = false, hard = false;
+                if (ui.handleFlashcardTouch(touchX, touchY, &flipped, &easy, &hard)) {
+                    if (flipped) {
+                        audio.playClick();
+                        flashcards.flip();
+                        ui.drawFlashcardsView(flashcards);
+                    } else if (easy) {
+                        audio.playWorkFinished();
+                        flashcards.nextCard(true);
+                        ui.drawFlashcardsView(flashcards);
+                    } else if (hard) {
+                        audio.playPause();
+                        flashcards.nextCard(false);
+                        ui.drawFlashcardsView(flashcards);
+                    }
+                }
+            } 
+            else if (currentView == VIEW_AGENDA) {
+                // Tocar en agenda refresca la vista
+                ui.drawAgendaView(wifi);
             } 
             else if (currentView == VIEW_WIFI_SCAN) {
                 bool rescan = false, back = false, nextPage = false;
@@ -196,7 +289,7 @@ void loop() {
                 if (back) {
                     audio.playClick();
                     currentView = VIEW_POMODORO;
-                    ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+                    refreshCurrentView();
                 } else if (rescan) {
                     audio.playClick();
                     ui.drawWiFiScanView(wifi, true);
@@ -244,9 +337,14 @@ void loop() {
         }
     }
 
-    // 5. Actualización periódica de la pantalla en vista Pomodoro
+    // 5. Actualizaciones periódicas de visualización
     if (currentView == VIEW_POMODORO) {
-        ui.updateTimerDisplay(pomodoro, currentLdr, wifi.isConnected());
+        ui.updatePomodoroTimer(pomodoro, currentLdr, wifi.isConnected());
+    } else if (currentView == VIEW_AGENDA) {
+        if (millis() - lastClockUpdate >= 1000) {
+            lastClockUpdate = millis();
+            ui.updateAgendaClock();
+        }
     }
 
     // 6. Sensor LDR y ajuste suave de retroiluminación cada 400 ms

@@ -60,8 +60,8 @@ Dispositivo de escritorio dedicado exclusivamente a la concentración, productiv
 
 - [x] **Fase 1:** Validación y calibración de hardware (TFT ILI9341, táctil capacitivo CST820, LED RGB, LDR y buzzer). ¡Completado y verificado!
 - [x] **Fase 2:** Implementación del motor Pomodoro, estados y alertas (LED + Sonido). ¡Completado y en funcionamiento!
-- [ ] **Fase 3:** Conexión Wi-Fi, sincronización de hora (NTP) y clima.
-- [ ] **Fase 4:** Integración con Google Calendar y Google Tasks.
-- [ ] **Fase 5:** Sistema de Flashcards y registro en MicroSD.
-- [ ] **Fase 6:** Diseño y pulido final de la interfaz gráfica táctil.
+- [x] **Fase 3:** Conexión Wi-Fi en pantalla con teclado táctil, almacenamiento NVS y sincronización de hora (NTP). ¡Completado y en funcionamiento!
+- [x] **Fase 4:** Lista de micro-tareas To-Do interactivas con marcado táctil y persistencia en memoria. ¡Completado y en funcionamiento!
+- [x] **Fase 5:** Sistema de Flashcards de repaso activo (Active Recall) con volteo táctil de tarjetas. ¡Completado y en funcionamiento!
+- [ ] **Fase 6:** Sincronizador de eventos Google Calendar / Google Tasks vía Google Apps Script y registro MicroSD.
 
