@@ -22,6 +22,11 @@ enum AppView {
     VIEW_SETTINGS,
     VIEW_INFO,
     VIEW_NIGHT_CLOCK,
+    VIEW_WEATHER,
+    VIEW_BREATHING,
+    VIEW_RGB_LAMP,
+    VIEW_BATTERY,
+    VIEW_STATS,
     VIEW_KEYBOARD_TASK,
     VIEW_KEYBOARD_CARD_Q,
     VIEW_KEYBOARD_CARD_A,
@@ -50,15 +55,15 @@ public:
 
     void begin();
     
-    // --- BARRA SUPERIOR UNIFICADA ESTILO ANDROID (STATUS BAR) ---
+    // --- BARRA SUPERIOR UNIFICADA MINIMALISTA (STATUS BAR) ---
     void drawUnifiedStatusBar(const BatteryManager &battery, bool wifiConnected, bool audioMuted, 
                              bool autoBrightness, int streakCount, const char *appTitle = nullptr);
 
-    // --- 1. PANTALLA DE INICIO (ANDROID LAUNCHER CON WIDGET DE CLIMA) ---
+    // --- 1. PANTALLA DE INICIO (LAUNCHER CON PESTAÑAS: ESTUDIO / UTILIDADES) ---
     void drawHomeScreen(const PomodoroEngine &engine, const TaskManager &tasks, 
                         const BatteryManager &battery, const WeatherManager &weather,
-                        bool wifiConnected, bool audioMuted, bool autoBrightness);
-    int handleHomeTouch(int x, int y); // 1=Pomo, 2=Todo, 3=Flash, 4=Agenda, 5=Ajustes, 6=Info
+                        bool wifiConnected, bool audioMuted, bool autoBrightness, int homeTab = 0);
+    int handleHomeTouch(int x, int y, int &homeTab);
 
     // --- 2. APLICACIÓN POMODORO ---
     void drawPomodoroView(const PomodoroEngine &engine, const BatteryManager &battery, 
@@ -66,32 +71,52 @@ public:
     void updatePomodoroTimer(const PomodoroEngine &engine, const BatteryManager &battery, bool wifiConnected);
     UIButtonAction handlePomodoroTouch(int x, int y);
 
-    // --- 3. APLICACIÓN TAREAS TO-DO (INTERACTIVA 100%) ---
+    // --- 3. APLICACIÓN TAREAS TO-DO ---
     void drawTodoView(const TaskManager &taskMgr, const BatteryManager &battery, bool wifiConnected);
     int handleTodoTouch(int x, int y, bool *outAdd, bool *outClear, int *outDelete, bool *outBack);
 
-    // --- 4. APLICACIÓN FLASHCARDS (LEITNER ACTIVO 100%) ---
+    // --- 4. APLICACIÓN FLASHCARDS ---
     void drawFlashcardsView(const FlashcardManager &flashcards, const BatteryManager &battery, bool wifiConnected);
     bool handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEasy, bool *outHard, bool *outAdd, bool *outBack);
 
-    // --- 5. APLICACIÓN AGENDA & RELOJ & EXÁMENES & CLIMA ---
+    // --- 5. APLICACIÓN AGENDA & RELOJ & EXÁMENES ---
     void drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
                         const BatteryManager &battery, const WeatherManager &weather);
     void updateAgendaClock(CalendarManager &calendar, const WeatherManager &weather);
     bool handleAgendaTouch(int x, int y, bool *outAddExam, bool *outNightMode, bool *outBack);
 
-    // --- 6. PANTALLA DEDICADA: MODO RELOJ NOCTURNO (NIGHT DESK CLOCK) ---
+    // --- 6. APLICACIÓN DEDICADA: ESTACIÓN DE CLIMA (OPEN-METEO) ---
+    void drawWeatherView(const WeatherManager &weather, const BatteryManager &battery, bool wifiConnected);
+    bool handleWeatherTouch(int x, int y, bool *outRefresh, bool *outBack);
+
+    // --- 7. APLICACIÓN DEDICADA: RELOJ NOCTURNO (NIGHT DESK CLOCK) ---
     void drawNightClockView(const BatteryManager &battery, const WeatherManager &weather);
     void updateNightClock(const BatteryManager &battery, const WeatherManager &weather);
-    bool handleNightClockTouch(int x, int y); // Tocar sale al Home
+    bool handleNightClockTouch(int x, int y);
 
-    // --- 7. APLICACIÓN AJUSTES DEL SISTEMA ---
+    // --- 8. APLICACIÓN DEDICADA: RESPIRACIÓN CONSCIENTE (BOX BREATHING) ---
+    void drawBreathingView(int phase, int secondsLeft, int cycle, const BatteryManager &battery);
+    bool handleBreathingTouch(int x, int y);
+
+    // --- 9. APLICACIÓN DEDICADA: LÁMPARA RGB DE ESCRITORIO ---
+    void drawRgbLampView(int currentMode, const BatteryManager &battery);
+    int handleRgbLampTouch(int x, int y, bool *outBack);
+
+    // --- 10. APLICACIÓN DEDICADA: TELEMETRÍA BATERÍA 5000 mAh ---
+    void drawBatteryView(const BatteryManager &battery, bool wifiConnected);
+    bool handleBatteryTouch(int x, int y);
+
+    // --- 11. APLICACIÓN DEDICADA: ESTADÍSTICAS & HISTORIAL MICROSD ---
+    void drawStatsView(StorageManager &storage, const PomodoroEngine &pomodoro, const BatteryManager &battery, bool wifiConnected);
+    bool handleStatsTouch(int x, int y);
+
+    // --- 12. APLICACIÓN AJUSTES DEL SISTEMA ---
     void drawSettingsView(const WiFiConfig &wifi, const BatteryManager &battery, 
                           int brightness, bool autoBrightness, bool soundMuted, int timeoutMinutes);
     int handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outBriDown, bool *outBriUp, 
                            bool *outToggleMute, bool *outTimeoutToggle, bool *outNightClock, bool *outOpenWifi, bool *outBack);
 
-    // --- 8. APLICACIÓN INFO & ESTADÍSTICAS ---
+    // --- 13. APLICACIÓN INFO DEL SISTEMA & HARDWARE ---
     void drawInfoView(const BatteryManager &battery, StorageManager &storage, 
                       const PomodoroEngine &pomodoro, bool wifiConnected);
     bool handleInfoTouch(int x, int y);
@@ -105,7 +130,6 @@ public:
 private:
     TFT_eSPI &_tft;
 
-    // Estados previos para evitar parpadeos
     uint32_t _lastRemainingSec = 0xFFFFFFFF;
     PomodoroState _lastState = (PomodoroState)0xFF;
     uint8_t _lastCycle = 0xFF;

@@ -32,14 +32,24 @@ CalendarManager calendar;
 StorageManager storage;
 WeatherManager weather;
 
-// Estado de la interfaz (inicia en el Launcher estilo Android)
+// Estado de la interfaz
 AppView currentView = VIEW_HOME;
+int homeTab = 0; // 0 = Estudio (6 apps), 1 = Utilidades Desk (6 apps)
 int scanPage = 0;
 String selectedSSID = "";
 String typedPassword = "";
 String newCardQuestion = "";
 unsigned long resultStartTime = 0;
 bool connectionSuccess = false;
+
+// Estado de Lámpara RGB y Respiración
+int lampMode = 0; // 0 = Apagado, 1 = Blanco Cálido, 2 = Cian, 3 = Azul, 4 = Vela
+int breathingPhase = 0;
+int breathingSec = 4;
+int breathingCycle = 1;
+unsigned long lastBreathingTick = 0;
+unsigned long lastCandleTick = 0;
+bool candleFlickerState = false;
 
 // Configuración de pantalla y ahorro de energía
 unsigned long lastLdrCheck = 0;
@@ -56,7 +66,7 @@ bool screenDimmed = false;
 void refreshCurrentView() {
     switch (currentView) {
         case VIEW_HOME:
-            ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness);
+            ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness, homeTab);
             break;
         case VIEW_POMODORO:
             ui.drawPomodoroView(pomodoro, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
@@ -70,8 +80,23 @@ void refreshCurrentView() {
         case VIEW_AGENDA:
             ui.drawAgendaView(calendar, wifi, battery, weather);
             break;
+        case VIEW_WEATHER:
+            ui.drawWeatherView(weather, battery, wifi.isConnected());
+            break;
         case VIEW_NIGHT_CLOCK:
             ui.drawNightClockView(battery, weather);
+            break;
+        case VIEW_BREATHING:
+            ui.drawBreathingView(breathingPhase, breathingSec, breathingCycle, battery);
+            break;
+        case VIEW_RGB_LAMP:
+            ui.drawRgbLampView(lampMode, battery);
+            break;
+        case VIEW_BATTERY:
+            ui.drawBatteryView(battery, wifi.isConnected());
+            break;
+        case VIEW_STATS:
+            ui.drawStatsView(storage, pomodoro, battery, wifi.isConnected());
             break;
         case VIEW_SETTINGS:
             ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted(), timeoutMinutes);
@@ -94,7 +119,7 @@ void setup() {
     Serial.println("  ESTACION DE ESTUDIO INTELIGENTE - STUDY DECK");
     Serial.println("  Hardware: Guition ESP32-2432S024C (2.4\")");
     Serial.println("  Bateria: LiPo 5000 mAh 3.7V (18.5 Wh)");
-    Serial.println("  Clima: Open-Meteo + Modo Reloj Nocturno");
+    Serial.println("  Clima: Open-Meteo + Reloj Noche + Relax");
     Serial.println("==============================================\n");
 
     // 1. Inicializar retroiluminación
@@ -125,78 +150,80 @@ void setup() {
     // 6. Inicializar pantalla táctil y dibujar Home Launcher
     ui.begin();
     touch.begin();
-    ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness);
 
-    // 7. Auto-conexión si hay credenciales guardadas en NVS
-    if (wifi.hasSavedCredentials()) {
-        Serial.printf("[WiFi] Auto-conectando a '%s' guardada en NVS...\n", wifi.getSavedSSID().c_str());
-        wifi.startConnect(wifi.getSavedSSID(), wifi.getSavedPassword());
-    }
-
-    // Melodía de bienvenida
-    audio.playStart();
-    Serial.println("[Sistema] Study Deck listo.");
+    lastTouchTime = millis();
+    refreshCurrentView();
 }
 
 void loop() {
-    // 1. Actualización no bloqueante de periféricos y red
-    led.update();
-    battery.update();
-    calendar.update();
-    weather.update(wifi.isConnected());
-
-    // 2. Comprobar estado de conexión Wi-Fi en segundo plano
-    if (currentView == VIEW_WIFI_CONNECTING) {
-        WiFiConnectStatus st = wifi.checkConnectStatus();
-        if (st == WIFI_STATUS_CONNECTED) {
-            Serial.printf("[WiFi] Conectado con exito. IP: %s\n", wifi.getLocalIP().c_str());
-            audio.playWorkFinished();
-            wifi.saveCredentials(selectedSSID, typedPassword);
-            
-            // Sincronizar reloj por NTP (Hora peninsular España: UTC+1, 3600s daylight)
-            configTime(3600, 3600, "pool.ntp.org", "time.nist.gov");
-            weather.forceRefresh(true);
-            
-            currentView = VIEW_WIFI_RESULT;
-            connectionSuccess = true;
-            ui.drawWiFiResult(true, wifi.getLocalIP());
-            resultStartTime = millis();
-        } else if (st == WIFI_STATUS_FAILED) {
-            Serial.println("[WiFi] Error: tiempo de espera agotado al conectar.");
-            audio.playPause();
-            currentView = VIEW_WIFI_RESULT;
-            connectionSuccess = false;
-            ui.drawWiFiResult(false, "Revisa la clave o la distancia.");
-            resultStartTime = millis();
-        }
-    } else if (currentView == VIEW_WIFI_RESULT) {
-        if (connectionSuccess && (millis() - resultStartTime >= 2500)) {
-            currentView = VIEW_SETTINGS;
-            refreshCurrentView();
-        }
-    }
-
-    // 3. Actualización de la máquina de estados Pomodoro y registro en MicroSD
-    PomodoroEvent event = pomodoro.update();
-    if (event == POMO_EVENT_FOCUS_COMPLETE) {
-        Serial.println("[Pomodoro] Bloque de estudio completado. Guardando en MicroSD.");
+    // 1. Motores lógicos
+    PomodoroEvent pomoEv = pomodoro.update();
+    if (pomoEv == POMO_EVENT_FOCUS_COMPLETE) {
         audio.playWorkFinished();
         led.setMode(LED_MODE_BREAK);
         storage.logSession("Enfoque", pomodoro.getFocusMinutes(), true);
-        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME || currentView == VIEW_INFO) {
-            refreshCurrentView();
-        }
-    } else if (event == POMO_EVENT_BREAK_COMPLETE) {
-        Serial.println("[Pomodoro] Descanso finalizado. Guardando en MicroSD.");
+    } else if (pomoEv == POMO_EVENT_BREAK_COMPLETE) {
         audio.playBreakFinished();
         led.setMode(LED_MODE_FOCUS);
-        storage.logSession("Descanso", (pomodoro.getState() == POMO_STATE_LONG_BREAK) ? 15 : 5, true);
-        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME || currentView == VIEW_INFO) {
-            refreshCurrentView();
+    }
+
+    led.update();
+    battery.update();
+    weather.update(wifi.isConnected());
+
+    // 2. Animación de Respiración Box Breathing (4-4-4-4)
+    if (currentView == VIEW_BREATHING) {
+        if (millis() - lastBreathingTick >= 1000) {
+            lastBreathingTick = millis();
+            breathingSec--;
+            if (breathingSec <= 0) {
+                breathingSec = 4;
+                breathingPhase = (breathingPhase + 1) % 4;
+                if (breathingPhase == 0) {
+                    breathingCycle = (breathingCycle % 4) + 1;
+                }
+                // Sincronizar color de LED calmante
+                if (breathingPhase == 0)      led.setRaw(false, true, true);  // Inhala: Cian suave
+                else if (breathingPhase == 1) led.setRaw(false, true, true);  // Mantén: Cian
+                else if (breathingPhase == 2) led.setRaw(false, false, true); // Exhala: Azul profundo
+                else                          led.setRaw(false, false, false);// Pausa: Apagado
+            }
+            ui.drawBreathingView(breathingPhase, breathingSec, breathingCycle, battery);
         }
     }
 
-    // 4. Modo de ahorro de batería / Atenuación por inactividad
+    // 3. Efecto parpadeo suave vela en modo lámpara vela
+    if (lampMode == 4 && (currentView == VIEW_RGB_LAMP || currentView == VIEW_HOME)) {
+        if (millis() - lastCandleTick >= 120) {
+            lastCandleTick = millis();
+            candleFlickerState = !candleFlickerState;
+            if (candleFlickerState) {
+                led.setRaw(true, true, false); // Ámbar cálido
+            } else {
+                led.setRaw(true, false, false); // Oscilación suave
+            }
+        }
+    }
+
+    // 4. Gestión de conexión Wi-Fi asíncrona
+    if (currentView == VIEW_WIFI_CONNECTING) {
+        WiFiConnectStatus status = wifi.checkConnectStatus();
+        if (status == WIFI_STATUS_CONNECTED) {
+            connectionSuccess = true;
+            configTime(0, 0, "pool.ntp.org", "time.google.com");
+            weather.update(true); // Forzar descarga inmediata de clima
+            currentView = VIEW_WIFI_RESULT;
+            ui.drawWiFiResult(true, wifi.getLocalIP());
+            resultStartTime = millis();
+        } else if (status == WIFI_STATUS_FAILED) {
+            connectionSuccess = false;
+            currentView = VIEW_WIFI_RESULT;
+            ui.drawWiFiResult(false, "Clave incorrecta o tiempo agotado");
+            resultStartTime = millis();
+        }
+    }
+
+    // 5. Apagado / atenuación suave de pantalla por inactividad
     if (timeoutMinutes > 0 && currentView != VIEW_NIGHT_CLOCK) {
         unsigned long maxIdleMs = (unsigned long)timeoutMinutes * 60000;
         if ((millis() - lastTouchTime > maxIdleMs) && !screenDimmed) {
@@ -205,7 +232,7 @@ void loop() {
         }
     }
 
-    // 5. Lectura táctil
+    // 6. Lectura táctil capacitiva CST820
     uint16_t rawX = 0, rawY = 0;
     uint8_t gesture = GESTURE_NONE;
     if (touch.getRawTouch(&rawX, &rawY, &gesture)) {
@@ -238,10 +265,13 @@ void loop() {
             if (touchY < 0) touchY = 0;
             if (touchY >= 240) touchY = 239;
 
-            // --- VISTA 0: LAUNCHER HOME ESTILO ANDROID ---
+            // --- VISTA 0: LAUNCHER HOME CON PESTAÑAS (12 APPS) ---
             if (currentView == VIEW_HOME) {
-                int appSelected = ui.handleHomeTouch(touchX, touchY);
-                if (appSelected == 1) { // ⏱️ Pomodoro
+                int appSelected = ui.handleHomeTouch(touchX, touchY, homeTab);
+                if (appSelected == -10) {
+                    audio.playClick();
+                    refreshCurrentView();
+                } else if (appSelected == 1) { // ⏱️ Pomodoro
                     audio.playClick();
                     currentView = VIEW_POMODORO;
                     refreshCurrentView();
@@ -253,7 +283,7 @@ void loop() {
                     audio.playClick();
                     currentView = VIEW_FLASH;
                     refreshCurrentView();
-                } else if (appSelected == 4) { // 📅 Agenda & Clima
+                } else if (appSelected == 4) { // 📅 Agenda & Exámenes
                     audio.playClick();
                     currentView = VIEW_AGENDA;
                     refreshCurrentView();
@@ -261,9 +291,38 @@ void loop() {
                     audio.playClick();
                     currentView = VIEW_SETTINGS;
                     refreshCurrentView();
-                } else if (appSelected == 6) { // 📊 Info & Estadísticas
+                } else if (appSelected == 6) { // ℹ️ Info & Hardware
                     audio.playClick();
                     currentView = VIEW_INFO;
+                    refreshCurrentView();
+                } else if (appSelected == 7) { // 📊 Stats & MicroSD
+                    audio.playClick();
+                    currentView = VIEW_STATS;
+                    refreshCurrentView();
+                } else if (appSelected == 8) { // 🌤️ Estación Clima Open-Meteo
+                    audio.playClick();
+                    currentView = VIEW_WEATHER;
+                    refreshCurrentView();
+                } else if (appSelected == 9) { // 🌙 Reloj Nocturno
+                    audio.playClick();
+                    currentView = VIEW_NIGHT_CLOCK;
+                    analogWrite(PIN_BACKLIGHT, 25);
+                    ui.drawNightClockView(battery, weather);
+                } else if (appSelected == 10) { // 🫁 Respiración Consciente Box
+                    audio.playClick();
+                    currentView = VIEW_BREATHING;
+                    breathingPhase = 0;
+                    breathingSec = 4;
+                    breathingCycle = 1;
+                    led.setRaw(false, true, true);
+                    ui.drawBreathingView(breathingPhase, breathingSec, breathingCycle, battery);
+                } else if (appSelected == 11) { // 💡 Lámpara RGB de Escritorio
+                    audio.playClick();
+                    currentView = VIEW_RGB_LAMP;
+                    refreshCurrentView();
+                } else if (appSelected == 12) { // 🔋 Telemetría Batería 5000 mAh
+                    audio.playClick();
+                    currentView = VIEW_BATTERY;
                     refreshCurrentView();
                 }
             }
@@ -276,13 +335,11 @@ void loop() {
                         currentView = VIEW_HOME;
                         refreshCurrentView();
                         break;
-
                     case UI_ACTION_OPEN_WIFI:
                         audio.playClick();
                         currentView = VIEW_SETTINGS;
                         refreshCurrentView();
                         break;
-
                     case UI_ACTION_PLAY_PAUSE:
                         pomodoro.togglePlayPause();
                         if (pomodoro.isRunning()) {
@@ -293,40 +350,34 @@ void loop() {
                             led.setMode(LED_MODE_PAUSED);
                         }
                         break;
-
                     case UI_ACTION_RESET:
                         audio.playClick();
                         pomodoro.reset();
                         led.setMode(LED_MODE_IDLE);
                         break;
-
                     case UI_ACTION_SKIP:
                         audio.playSkip();
                         pomodoro.skip();
                         led.setMode(pomodoro.isFocus() ? LED_MODE_FOCUS : LED_MODE_BREAK);
                         break;
-
                     case UI_ACTION_SELECT_25:
                         if (!pomodoro.isRunning()) {
                             audio.playClick();
                             pomodoro.setFocusMinutes(25);
                         }
                         break;
-
                     case UI_ACTION_SELECT_50:
                         if (!pomodoro.isRunning()) {
                             audio.playClick();
                             pomodoro.setFocusMinutes(50);
                         }
                         break;
-
                     case UI_ACTION_SELECT_90:
                         if (!pomodoro.isRunning()) {
                             audio.playClick();
                             pomodoro.setFocusMinutes(90);
                         }
                         break;
-
                     default:
                         break;
                 }
@@ -437,7 +488,7 @@ void loop() {
                     refreshCurrentView();
                 }
             }
-            // --- VISTA 4: APLICACIÓN AGENDA & RELOJ & CLIMA ---
+            // --- VISTA 4: APLICACIÓN AGENDA & EXÁMENES ---
             else if (currentView == VIEW_AGENDA) {
                 bool addExam = false, nightMode = false, back = false;
                 if (ui.handleAgendaTouch(touchX, touchY, &addExam, &nightMode, &back)) {
@@ -474,7 +525,66 @@ void loop() {
                     refreshCurrentView();
                 }
             }
-            // --- VISTA 5: APLICACIÓN AJUSTES DEL SISTEMA ---
+            // --- VISTA CLIMA OPEN-METEO ---
+            else if (currentView == VIEW_WEATHER) {
+                bool ref = false, back = false;
+                if (ui.handleWeatherTouch(touchX, touchY, &ref, &back)) {
+                    if (back) {
+                        audio.playClick();
+                        currentView = VIEW_HOME;
+                        refreshCurrentView();
+                    } else if (ref) {
+                        audio.playClick();
+                        weather.update(true);
+                        ui.drawWeatherView(weather, battery, wifi.isConnected());
+                    }
+                }
+            }
+            // --- VISTA RESPIRACIÓN RELAX BOX ---
+            else if (currentView == VIEW_BREATHING) {
+                if (ui.handleBreathingTouch(touchX, touchY)) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    led.setMode(pomodoro.isRunning() ? (pomodoro.isFocus() ? LED_MODE_FOCUS : LED_MODE_BREAK) : LED_MODE_IDLE);
+                    refreshCurrentView();
+                }
+            }
+            // --- VISTA LÁMPARA RGB DE ESCRITORIO ---
+            else if (currentView == VIEW_RGB_LAMP) {
+                bool back = false;
+                int modeSel = ui.handleRgbLampTouch(touchX, touchY, &back);
+                if (back) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
+                } else if (modeSel >= 0) {
+                    audio.playClick();
+                    lampMode = modeSel;
+                    if (lampMode == 0) led.setRaw(false, false, false);
+                    else if (lampMode == 1) led.setRaw(true, true, false);  // Blanco Cálido (R+G)
+                    else if (lampMode == 2) led.setRaw(false, true, true);  // Cian Enfoque (G+B)
+                    else if (lampMode == 3) led.setRaw(false, false, true); // Relax Azul (B)
+                    else if (lampMode == 4) led.setRaw(true, true, false);  // Vela ámbar
+                    ui.drawRgbLampView(lampMode, battery);
+                }
+            }
+            // --- VISTA BATERÍA 5000 mAh ---
+            else if (currentView == VIEW_BATTERY) {
+                if (ui.handleBatteryTouch(touchX, touchY)) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
+                }
+            }
+            // --- VISTA ESTADÍSTICAS & HISTORIAL MICROSD ---
+            else if (currentView == VIEW_STATS) {
+                if (ui.handleStatsTouch(touchX, touchY)) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
+                }
+            }
+            // --- VISTA AJUSTES DEL SISTEMA ---
             else if (currentView == VIEW_SETTINGS) {
                 bool toggleAuto = false, briDown = false, briUp = false;
                 bool toggleMute = false, timeoutToggle = false, nightClock = false, openWifi = false, back = false;
@@ -519,7 +629,7 @@ void loop() {
                     ui.drawWiFiScanView(wifi, battery, false, scanPage);
                 }
             }
-            // --- VISTA 6: APLICACIÓN INFO & ESTADÍSTICAS ---
+            // --- VISTA INFO DEL SISTEMA ---
             else if (currentView == VIEW_INFO) {
                 if (ui.handleInfoTouch(touchX, touchY)) {
                     audio.playClick();
@@ -586,13 +696,13 @@ void loop() {
         }
     }
 
-    // 6. Actualizaciones periódicas de visualización según la vista activa
+    // 7. Actualizaciones periódicas de visualización según la vista activa
     if (currentView == VIEW_HOME) {
         time_t now = time(nullptr);
         struct tm *t = localtime(&now);
         if (t->tm_min != lastHomeMin) {
             lastHomeMin = t->tm_min;
-            ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness);
+            ui.drawHomeScreen(pomodoro, taskMgr, battery, weather, wifi.isConnected(), audio.isMuted(), autoBrightness, homeTab);
         }
     } else if (currentView == VIEW_POMODORO) {
         ui.updatePomodoroTimer(pomodoro, battery, wifi.isConnected());
@@ -608,7 +718,7 @@ void loop() {
         }
     }
 
-    // 7. Sensor LDR y ajuste suave de retroiluminación cada 400 ms si autoBrightness está activo
+    // 8. Sensor LDR y ajuste suave de retroiluminación cada 400 ms si autoBrightness está activo
     if (autoBrightness && !screenDimmed && currentView != VIEW_NIGHT_CLOCK && (millis() - lastLdrCheck >= 400)) {
         lastLdrCheck = millis();
         currentLdr = analogRead(PIN_LDR);
