@@ -35,6 +35,9 @@
 // --- SENSOR DE LUZ AMBIENTAL (LDR) ---
 #define PIN_LDR           34   // Entrada analógica ADC1
 
+// --- MONITOR DE BATERÍA (ADC1) ---
+#define PIN_BATTERY       35   // Entrada analógica ADC1 (Divisor de tensión LiPo 3.7V/4.2V)
+
 // --- AUDIO / ZUMBADOR ---
 #define PIN_BUZZER        26   // Hacia amplificador SC8002B
 

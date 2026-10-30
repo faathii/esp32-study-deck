@@ -47,6 +47,10 @@ El controlador capacitivo se comunica a través de $I^2C$ en la dirección escla
 * **Pin:** `GPIO 34` (Entrada puramente analógica ADC1).
 * **Circuito:** Divisor de tensión formado por R15 (1 MΩ), R19 (1 MΩ) y la fotorresistencia GT36516.
 
+### Monitor de Batería LiPo
+* **Pin:** `GPIO 35` (Entrada puramente analógica ADC1).
+* **Circuito:** Divisor de tensión para medir la tensión de la celda LiPo (3.0V – 4.2V) conectada al puerto JST de 1.25 mm y gestionada por el chip de carga IP5603. Permite cálculo no bloqueante de porcentaje (0% - 100%) y detección de carga por USB.
+
 ### Audio / Zumbador
 * **Pin:** `GPIO 26`
 * **Circuito:** Filtro pasa-bajos hacia el amplificador SC8002B que alimenta el zumbador/altavoz y el conector P4 JST.

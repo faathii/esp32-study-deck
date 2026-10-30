@@ -11,8 +11,11 @@
 #include "KeyboardUI.h"
 #include "TaskManager.h"
 #include "FlashcardManager.h"
+#include "BatteryManager.h"
+#include "CalendarManager.h"
+#include "StorageManager.h"
 
-// Periféricos y componentes
+// Periféricos y componentes del sistema
 TFT_eSPI tft = TFT_eSPI();
 CST820 touch(I2C_SDA_PIN, I2C_SCL_PIN, TP_RST_PIN, TP_INT_PIN);
 AudioNotifier audio;
@@ -23,6 +26,9 @@ WiFiConfig wifi;
 KeyboardUI keyboard(tft);
 TaskManager taskMgr;
 FlashcardManager flashcards;
+BatteryManager battery(PIN_BATTERY);
+CalendarManager calendar;
+StorageManager storage;
 
 // Estado de la interfaz (inicia en el Launcher estilo Android)
 AppView currentView = VIEW_HOME;
@@ -36,33 +42,39 @@ bool connectionSuccess = false;
 unsigned long lastLdrCheck = 0;
 unsigned long lastTouchTime = 0;
 unsigned long lastClockUpdate = 0;
+unsigned long lastHomeUpdate = 0;
 int lastHomeMin = -1;
 int currentLdr = 2000;
 int currentBrightness = 220;
+int targetBrightness = 220;
 bool autoBrightness = true;
+bool screenDimmed = false;
 
 void refreshCurrentView() {
     switch (currentView) {
         case VIEW_HOME:
-            ui.drawHomeScreen(pomodoro, taskMgr, wifi.isConnected(), currentLdr);
+            ui.drawHomeScreen(pomodoro, taskMgr, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
             break;
         case VIEW_POMODORO:
-            ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
+            ui.drawPomodoroView(pomodoro, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
             break;
         case VIEW_TODO:
-            ui.drawTodoView(taskMgr);
+            ui.drawTodoView(taskMgr, battery, wifi.isConnected());
             break;
         case VIEW_FLASH:
-            ui.drawFlashcardsView(flashcards);
+            ui.drawFlashcardsView(flashcards, battery, wifi.isConnected());
             break;
         case VIEW_AGENDA:
-            ui.drawAgendaView(wifi);
+            ui.drawAgendaView(calendar, wifi, battery);
             break;
         case VIEW_SETTINGS:
-            ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+            ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted());
+            break;
+        case VIEW_INFO:
+            ui.drawInfoView(battery, storage, pomodoro, wifi.isConnected());
             break;
         case VIEW_WIFI_SCAN:
-            ui.drawWiFiScanView(wifi, false, scanPage);
+            ui.drawWiFiScanView(wifi, battery, false, scanPage);
             break;
         default:
             break;
@@ -75,26 +87,29 @@ void setup() {
     Serial.println("\n==============================================");
     Serial.println("  ESTACION DE ESTUDIO INTELIGENTE - STUDY DECK");
     Serial.println("  Hardware: Guition ESP32-2432S024C (2.4\")");
-    Serial.println("  Interfaz: Android App Launcher Grid");
+    Serial.println("  OS: Android App Launcher + Telemetria Bateria");
     Serial.println("==============================================\n");
 
     // 1. Inicializar retroiluminación con nivel confortable
     pinMode(PIN_BACKLIGHT, OUTPUT);
     analogWrite(PIN_BACKLIGHT, currentBrightness);
 
-    // 2. Inicializar sensor LDR
+    // 2. Inicializar sensor LDR y Monitor de Batería
     pinMode(PIN_LDR, INPUT);
     currentLdr = analogRead(PIN_LDR);
+    battery.begin();
 
     // 3. Inicializar audio y LED RGB
     audio.begin();
     led.begin();
     led.setMode(LED_MODE_IDLE);
 
-    // 4. Inicializar motores de estudio
+    // 4. Inicializar motores de estudio, agenda y almacenamiento SD
     pomodoro.begin();
     taskMgr.begin();
     flashcards.begin();
+    calendar.begin();
+    storage.begin();
 
     // 5. Inicializar subsistema Wi-Fi
     wifi.begin();
@@ -102,7 +117,7 @@ void setup() {
     // 6. Inicializar pantalla táctil y dibujar Home Launcher
     ui.begin();
     touch.begin();
-    ui.drawHomeScreen(pomodoro, taskMgr, wifi.isConnected(), currentLdr);
+    ui.drawHomeScreen(pomodoro, taskMgr, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
 
     // 7. Auto-conexión si hay credenciales guardadas en NVS
     if (wifi.hasSavedCredentials()) {
@@ -110,14 +125,16 @@ void setup() {
         wifi.startConnect(wifi.getSavedSSID(), wifi.getSavedPassword());
     }
 
-    // Sonido de inicio
+    // Sonido de bienvenida
     audio.playStart();
-    Serial.println("[Sistema] Study Deck listo y a la espera de interaccion.");
+    Serial.println("[Sistema] Study Deck listo y a la escucha.");
 }
 
 void loop() {
-    // 1. Actualización no bloqueante del LED RGB
+    // 1. Actualización no bloqueante del LED RGB, Batería y Agenda
     led.update();
+    battery.update();
+    calendar.update();
 
     // 2. Comprobar estado de conexión Wi-Fi en segundo plano
     if (currentView == VIEW_WIFI_CONNECTING) {
@@ -149,29 +166,47 @@ void loop() {
         }
     }
 
-    // 3. Actualización de la máquina de estados Pomodoro (siempre activa en segundo plano)
+    // 3. Actualización de la máquina de estados Pomodoro y registro en MicroSD
     PomodoroEvent event = pomodoro.update();
     if (event == POMO_EVENT_FOCUS_COMPLETE) {
         Serial.println("[Pomodoro] ¡Bloque de estudio completado! Iniciando descanso.");
         audio.playWorkFinished();
         led.setMode(LED_MODE_BREAK);
-        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME) {
+        storage.logSession("Enfoque", pomodoro.getFocusMinutes(), true);
+        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME || currentView == VIEW_INFO) {
             refreshCurrentView();
         }
     } else if (event == POMO_EVENT_BREAK_COMPLETE) {
         Serial.println("[Pomodoro] ¡Descanso finalizado! Volviendo al modo enfoque.");
         audio.playBreakFinished();
         led.setMode(LED_MODE_FOCUS);
-        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME) {
+        storage.logSession("Descanso", (pomodoro.getState() == POMO_STATE_LONG_BREAK) ? 15 : 5, true);
+        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME || currentView == VIEW_INFO) {
             refreshCurrentView();
         }
     }
 
-    // 4. Lectura táctil
+    // 4. Modo de ahorro de batería / Atenuación por inactividad
+    unsigned long timeSinceTouch = millis() - lastTouchTime;
+    if (timeSinceTouch > 90000 && !screenDimmed) {
+        // Atenuar suavemente tras 1.5 min sin interacción para ahorrar batería
+        screenDimmed = true;
+        analogWrite(PIN_BACKLIGHT, 30);
+    }
+
+    // 5. Lectura táctil
     uint16_t rawX = 0, rawY = 0;
     uint8_t gesture = GESTURE_NONE;
     if (touch.getRawTouch(&rawX, &rawY, &gesture)) {
-        if (millis() - lastTouchTime >= 200) {
+        // Despertar pantalla si estaba atenuada
+        if (screenDimmed) {
+            screenDimmed = false;
+            analogWrite(PIN_BACKLIGHT, currentBrightness);
+            lastTouchTime = millis();
+            return;
+        }
+
+        if (millis() - lastTouchTime >= 180) {
             lastTouchTime = millis();
 
             // Transformar a coordenadas horizontales (320x240)
@@ -185,25 +220,29 @@ void loop() {
             // --- VISTA 0: LAUNCHER HOME ESTILO ANDROID ---
             if (currentView == VIEW_HOME) {
                 int appSelected = ui.handleHomeTouch(touchX, touchY);
-                if (appSelected == 1) { // Pomodoro
+                if (appSelected == 1) { // ⏱️ Pomodoro
                     audio.playClick();
                     currentView = VIEW_POMODORO;
                     refreshCurrentView();
-                } else if (appSelected == 2) { // Tareas
+                } else if (appSelected == 2) { // 📝 Tareas
                     audio.playClick();
                     currentView = VIEW_TODO;
                     refreshCurrentView();
-                } else if (appSelected == 3) { // Fichas Flashcards
+                } else if (appSelected == 3) { // 💡 Fichas Flashcards
                     audio.playClick();
                     currentView = VIEW_FLASH;
                     refreshCurrentView();
-                } else if (appSelected == 4) { // Agenda & Reloj
+                } else if (appSelected == 4) { // 📅 Agenda & Exámenes
                     audio.playClick();
                     currentView = VIEW_AGENDA;
                     refreshCurrentView();
-                } else if (appSelected == 5) { // Ajustes del Sistema
+                } else if (appSelected == 5) { // ⚙️ Ajustes del Sistema
                     audio.playClick();
                     currentView = VIEW_SETTINGS;
+                    refreshCurrentView();
+                } else if (appSelected == 6) { // 📊 Info & MicroSD
+                    audio.playClick();
+                    currentView = VIEW_INFO;
                     refreshCurrentView();
                 }
             }
@@ -275,11 +314,11 @@ void loop() {
                 } else if (resetTasks) {
                     audio.playClick();
                     taskMgr.resetToDefaults();
-                    ui.drawTodoView(taskMgr);
+                    ui.drawTodoView(taskMgr, battery, wifi.isConnected());
                 } else if (taskIdx >= 0) {
                     audio.playClick();
                     taskMgr.toggleTask(taskIdx);
-                    ui.drawTodoView(taskMgr);
+                    ui.drawTodoView(taskMgr, battery, wifi.isConnected());
                 }
             } 
             // --- VISTA 3: APLICACIÓN FLASHCARDS ---
@@ -293,15 +332,15 @@ void loop() {
                     } else if (flipped) {
                         audio.playClick();
                         flashcards.flip();
-                        ui.drawFlashcardsView(flashcards);
+                        ui.drawFlashcardsView(flashcards, battery, wifi.isConnected());
                     } else if (easy) {
                         audio.playWorkFinished();
                         flashcards.nextCard(true);
-                        ui.drawFlashcardsView(flashcards);
+                        ui.drawFlashcardsView(flashcards, battery, wifi.isConnected());
                     } else if (hard) {
                         audio.playPause();
                         flashcards.nextCard(false);
-                        ui.drawFlashcardsView(flashcards);
+                        ui.drawFlashcardsView(flashcards, battery, wifi.isConnected());
                     }
                 }
             } 
@@ -312,7 +351,7 @@ void loop() {
                     currentView = VIEW_HOME;
                     refreshCurrentView();
                 } else {
-                    ui.drawAgendaView(wifi);
+                    ui.drawAgendaView(calendar, wifi, battery);
                 }
             } 
             // --- VISTA 5: APLICACIÓN AJUSTES DEL SISTEMA ---
@@ -329,30 +368,38 @@ void loop() {
                 } else if (toggleAuto) {
                     autoBrightness = !autoBrightness;
                     audio.playClick();
-                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                    ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted());
                 } else if (briDown) {
                     autoBrightness = false;
                     currentBrightness = max(40, currentBrightness - 25);
                     analogWrite(PIN_BACKLIGHT, currentBrightness);
                     audio.playClick();
-                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                    ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted());
                 } else if (briUp) {
                     autoBrightness = false;
                     currentBrightness = min(255, currentBrightness + 25);
                     analogWrite(PIN_BACKLIGHT, currentBrightness);
                     audio.playClick();
-                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                    ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted());
                 } else if (toggleMute) {
                     audio.toggleMute();
                     if (!audio.isMuted()) audio.playClick();
-                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                    ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness, audio.isMuted());
                 } else if (openWifi) {
                     audio.playClick();
                     currentView = VIEW_WIFI_SCAN;
-                    ui.drawWiFiScanView(wifi, true);
+                    ui.drawWiFiScanView(wifi, battery, true);
                     wifi.scanNetworks();
                     scanPage = 0;
-                    ui.drawWiFiScanView(wifi, false, scanPage);
+                    ui.drawWiFiScanView(wifi, battery, false, scanPage);
+                }
+            }
+            // --- VISTA 6: APLICACIÓN INFO & ESTADÍSTICAS ---
+            else if (currentView == VIEW_INFO) {
+                if (ui.handleInfoTouch(touchX, touchY)) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
                 }
             }
             // --- VISTAS WI-FI CONFIG ---
@@ -366,17 +413,17 @@ void loop() {
                     refreshCurrentView();
                 } else if (rescan) {
                     audio.playClick();
-                    ui.drawWiFiScanView(wifi, true);
+                    ui.drawWiFiScanView(wifi, battery, true);
                     wifi.scanNetworks();
                     scanPage = 0;
-                    ui.drawWiFiScanView(wifi, false, scanPage);
+                    ui.drawWiFiScanView(wifi, battery, false, scanPage);
                 } else if (nextPage) {
                     audio.playClick();
                     int totalP = (wifi.getNetworkCount() + 3) / 4;
                     if (totalP > 0) {
                         scanPage = (scanPage + 1) % totalP;
                     }
-                    ui.drawWiFiScanView(wifi, false, scanPage);
+                    ui.drawWiFiScanView(wifi, battery, false, scanPage);
                 } else if (selectedIdx >= 0) {
                     audio.playClick();
                     selectedSSID = wifi.getNetwork(selectedIdx).ssid;
@@ -392,7 +439,7 @@ void loop() {
                 } else if (kAction == KEY_ACTION_BACK) {
                     audio.playClick();
                     currentView = VIEW_WIFI_SCAN;
-                    ui.drawWiFiScanView(wifi, false, scanPage);
+                    ui.drawWiFiScanView(wifi, battery, false, scanPage);
                 } else if (kAction == KEY_ACTION_SUBMIT) {
                     audio.playStart();
                     typedPassword = keyboard.getText();
@@ -405,7 +452,7 @@ void loop() {
                 audio.playClick();
                 if (!connectionSuccess) {
                     currentView = VIEW_WIFI_SCAN;
-                    ui.drawWiFiScanView(wifi, false, scanPage);
+                    ui.drawWiFiScanView(wifi, battery, false, scanPage);
                 } else {
                     currentView = VIEW_SETTINGS;
                     refreshCurrentView();
@@ -414,29 +461,29 @@ void loop() {
         }
     }
 
-    // 5. Actualizaciones periódicas de visualización según la vista activa
+    // 6. Actualizaciones periódicas de visualización según la vista activa
     if (currentView == VIEW_HOME) {
         time_t now = time(nullptr);
         struct tm *t = localtime(&now);
         if (t->tm_min != lastHomeMin) {
             lastHomeMin = t->tm_min;
-            ui.drawHomeScreen(pomodoro, taskMgr, wifi.isConnected(), currentLdr);
+            ui.drawHomeScreen(pomodoro, taskMgr, battery, wifi.isConnected(), audio.isMuted(), autoBrightness);
         }
     } else if (currentView == VIEW_POMODORO) {
-        ui.updatePomodoroTimer(pomodoro, currentLdr, wifi.isConnected());
+        ui.updatePomodoroTimer(pomodoro, battery, wifi.isConnected());
     } else if (currentView == VIEW_AGENDA) {
         if (millis() - lastClockUpdate >= 1000) {
             lastClockUpdate = millis();
-            ui.updateAgendaClock();
+            ui.updateAgendaClock(calendar);
         }
     }
 
-    // 6. Sensor LDR y ajuste suave de retroiluminación cada 400 ms si autoBrightness está activo
-    if (autoBrightness && (millis() - lastLdrCheck >= 400)) {
+    // 7. Sensor LDR y ajuste suave de retroiluminación cada 400 ms si autoBrightness está activo
+    if (autoBrightness && !screenDimmed && (millis() - lastLdrCheck >= 400)) {
         lastLdrCheck = millis();
         currentLdr = analogRead(PIN_LDR);
 
-        int targetBrightness = map(currentLdr, 4000, 500, 70, 255);
+        targetBrightness = map(currentLdr, 4000, 500, 70, 255);
         targetBrightness = constrain(targetBrightness, 70, 255);
 
         if (abs(targetBrightness - currentBrightness) > 8) {

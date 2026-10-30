@@ -8,6 +8,9 @@
 #include "WiFiConfig.h"
 #include "TaskManager.h"
 #include "FlashcardManager.h"
+#include "BatteryManager.h"
+#include "CalendarManager.h"
+#include "StorageManager.h"
 
 enum AppView {
     VIEW_HOME = 0,
@@ -16,6 +19,7 @@ enum AppView {
     VIEW_FLASH,
     VIEW_AGENDA,
     VIEW_SETTINGS,
+    VIEW_INFO,
     VIEW_WIFI_SCAN,
     VIEW_WIFI_KEYBOARD,
     VIEW_WIFI_CONNECTING,
@@ -39,35 +43,48 @@ public:
 
     void begin();
     
+    // --- BARRA SUPERIOR UNIFICADA ESTILO ANDROID / STATUS BAR ---
+    void drawUnifiedStatusBar(const BatteryManager &battery, bool wifiConnected, bool audioMuted, 
+                             bool autoBrightness, int streakCount, const char *appTitle = nullptr);
+
     // --- 1. PANTALLA DE INICIO (ANDROID LAUNCHER CON CAJAS DE APP) ---
-    void drawHomeScreen(const PomodoroEngine &engine, const TaskManager &tasks, bool wifiConnected, int ldrValue);
-    int handleHomeTouch(int x, int y); // Devuelve: 1=Pomo, 2=Todo, 3=Flash, 4=Agenda, 5=Ajustes
+    void drawHomeScreen(const PomodoroEngine &engine, const TaskManager &tasks, 
+                        const BatteryManager &battery, bool wifiConnected, 
+                        bool audioMuted, bool autoBrightness);
+    int handleHomeTouch(int x, int y); // Devuelve: 1=Pomo, 2=Todo, 3=Flash, 4=Agenda, 5=Ajustes, 6=Info
 
     // --- 2. APLICACIÓN POMODORO ---
-    void drawPomodoroView(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
-    void updatePomodoroTimer(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
+    void drawPomodoroView(const PomodoroEngine &engine, const BatteryManager &battery, 
+                          bool wifiConnected, bool audioMuted, bool autoBrightness);
+    void updatePomodoroTimer(const PomodoroEngine &engine, const BatteryManager &battery, bool wifiConnected);
     UIButtonAction handlePomodoroTouch(int x, int y);
 
     // --- 3. APLICACIÓN TAREAS TO-DO ---
-    void drawTodoView(const TaskManager &taskMgr);
+    void drawTodoView(const TaskManager &taskMgr, const BatteryManager &battery, bool wifiConnected);
     int handleTodoTouch(int x, int y, bool *outReset, bool *outBack);
 
     // --- 4. APLICACIÓN FLASHCARDS ---
-    void drawFlashcardsView(const FlashcardManager &flashcards);
+    void drawFlashcardsView(const FlashcardManager &flashcards, const BatteryManager &battery, bool wifiConnected);
     bool handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEasy, bool *outHard, bool *outBack);
 
     // --- 5. APLICACIÓN AGENDA & RELOJ ---
-    void drawAgendaView(const WiFiConfig &wifi);
-    void updateAgendaClock();
+    void drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, const BatteryManager &battery);
+    void updateAgendaClock(CalendarManager &calendar);
     bool handleAgendaTouch(int x, int y); // true = click en Volver
 
     // --- 6. APLICACIÓN AJUSTES DEL SISTEMA ---
-    void drawSettingsView(const WiFiConfig &wifi, int brightness, bool autoBrightness, bool soundMuted);
+    void drawSettingsView(const WiFiConfig &wifi, const BatteryManager &battery, 
+                          int brightness, bool autoBrightness, bool soundMuted);
     int handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outBriDown, bool *outBriUp, 
                            bool *outToggleMute, bool *outOpenWifi, bool *outClearWifi, bool *outBack);
 
+    // --- 7. APLICACIÓN INFO & ESTADÍSTICAS ---
+    void drawInfoView(const BatteryManager &battery, StorageManager &storage, 
+                      const PomodoroEngine &pomodoro, bool wifiConnected);
+    bool handleInfoTouch(int x, int y);
+
     // --- SUBVISTAS DE CONFIGURACIÓN WI-FI ---
-    void drawWiFiScanView(const WiFiConfig &wifi, bool scanning, int page = 0);
+    void drawWiFiScanView(const WiFiConfig &wifi, const BatteryManager &battery, bool scanning, int page = 0);
     int handleWiFiScanTouch(int x, int y, int netCount, int page, bool *outRescan, bool *outBack, bool *outNextPage);
     void drawWiFiConnecting(const String &ssid);
     void drawWiFiResult(bool success, const String &info);
@@ -80,12 +97,10 @@ private:
     PomodoroState _lastState = (PomodoroState)0xFF;
     uint8_t _lastCycle = 0xFF;
     uint16_t _lastFocusMin = 0xFF;
-    int _lastLdr = -1;
+    int _lastBatteryPct = -1;
     bool _lastWifiStatus = false;
 
     void drawAppCard(int x, int y, int w, int h, uint16_t bgColor, const char *icon, const char *title, const char *subtitle);
-    void drawHeaderWithBack(const char *title, uint16_t barColor = 0x1082);
-    void drawTopBar(const PomodoroEngine &engine, int ldrValue, bool wifiConnected);
     void drawModeButtons(const PomodoroEngine &engine);
     void drawCountdown(const PomodoroEngine &engine);
     void drawProgressBar(const PomodoroEngine &engine);
