@@ -6,6 +6,8 @@
 #include "LedIndicator.h"
 #include "PomodoroEngine.h"
 #include "UIManager.h"
+#include "WiFiConfig.h"
+#include "KeyboardUI.h"
 
 // Instancias de periféricos y controladores
 TFT_eSPI tft = TFT_eSPI();
@@ -14,6 +16,16 @@ AudioNotifier audio;
 LedIndicator led;
 PomodoroEngine pomodoro;
 UIManager ui(tft);
+WiFiConfig wifi;
+KeyboardUI keyboard(tft);
+
+// Estado de la aplicación
+AppView currentView = VIEW_POMODORO;
+int scanPage = 0;
+String selectedSSID = "";
+String typedPassword = "";
+unsigned long resultStartTime = 0;
+bool connectionSuccess = false;
 
 // Variables de control temporal
 unsigned long lastLdrCheck = 0;
@@ -45,10 +57,19 @@ void setup() {
     // 4. Inicializar motor Pomodoro
     pomodoro.begin();
 
-    // 5. Inicializar pantalla táctil y dibujar interfaz completa
+    // 5. Inicializar subsistema Wi-Fi
+    wifi.begin();
+
+    // 6. Inicializar pantalla táctil y dibujar vista inicial
     ui.begin();
     touch.begin();
-    ui.fullRedraw(pomodoro, currentLdr);
+    ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+
+    // 7. Auto-conexión si hay credenciales guardadas en NVS
+    if (wifi.hasSavedCredentials()) {
+        Serial.printf("[WiFi] Auto-conectando a '%s' guardada en NVS...\n", wifi.getSavedSSID().c_str());
+        wifi.startConnect(wifi.getSavedSSID(), wifi.getSavedPassword());
+    }
 
     // Sonido de bienvenida
     audio.playStart();
@@ -59,90 +80,186 @@ void loop() {
     // 1. Actualización no bloqueante del LED RGB (parpadeo en pausa)
     led.update();
 
-    // 2. Actualización de la máquina de estados Pomodoro
+    // 2. Comprobar estado de conexión Wi-Fi en segundo plano
+    if (currentView == VIEW_WIFI_CONNECTING) {
+        WiFiConnectStatus st = wifi.checkConnectStatus();
+        if (st == WIFI_STATUS_CONNECTED) {
+            Serial.printf("[WiFi] Conectado con éxito. IP: %s\n", wifi.getLocalIP().c_str());
+            audio.playWorkFinished();
+            wifi.saveCredentials(selectedSSID, typedPassword);
+            
+            // Sincronizar reloj por NTP (Hora peninsular España: UTC+1, 3600s daylight)
+            configTime(3600, 3600, "pool.ntp.org", "time.nist.gov");
+            
+            currentView = VIEW_WIFI_RESULT;
+            connectionSuccess = true;
+            ui.drawWiFiResult(true, wifi.getLocalIP());
+            resultStartTime = millis();
+        } else if (st == WIFI_STATUS_FAILED) {
+            Serial.println("[WiFi] Error: tiempo de espera agotado al conectar.");
+            audio.playPause();
+            currentView = VIEW_WIFI_RESULT;
+            connectionSuccess = false;
+            ui.drawWiFiResult(false, "Revisa la clave o la distancia.");
+            resultStartTime = millis();
+        }
+    } else if (currentView == VIEW_WIFI_RESULT) {
+        // En resultado exitoso, volver automáticamente a Pomodoro tras 3 segundos
+        if (connectionSuccess && (millis() - resultStartTime >= 3000)) {
+            currentView = VIEW_POMODORO;
+            ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+        }
+    }
+
+    // 3. Actualización de la máquina de estados Pomodoro (siempre activa en segundo plano)
     PomodoroEvent event = pomodoro.update();
     if (event == POMO_EVENT_FOCUS_COMPLETE) {
         Serial.println("[Pomodoro] ¡Bloque de estudio completado! Iniciando descanso.");
         audio.playWorkFinished();
         led.setMode(LED_MODE_BREAK);
-        ui.fullRedraw(pomodoro, currentLdr);
+        if (currentView == VIEW_POMODORO) {
+            ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+        }
     } else if (event == POMO_EVENT_BREAK_COMPLETE) {
         Serial.println("[Pomodoro] ¡Descanso finalizado! Volviendo al modo enfoque.");
         audio.playBreakFinished();
         led.setMode(LED_MODE_FOCUS);
-        ui.fullRedraw(pomodoro, currentLdr);
+        if (currentView == VIEW_POMODORO) {
+            ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+        }
     }
 
-    // 3. Lectura táctil con debounce de 250 ms
+    // 4. Lectura táctil según la vista activa
     int touchX = -1, touchY = -1;
     if (touch.getTouch(&touchX, &touchY)) {
-        if (millis() - lastTouchTime >= 250) {
+        if (millis() - lastTouchTime >= 220) {
             lastTouchTime = millis();
-            Serial.printf("[Touch] Pulsado en X=%d, Y=%d\n", touchX, touchY);
 
-            UIButtonAction action = ui.handleTouch(touchX, touchY);
-            switch (action) {
-                case UI_ACTION_PLAY_PAUSE:
-                    pomodoro.togglePlayPause();
-                    if (pomodoro.isRunning()) {
-                        audio.playStart();
+            if (currentView == VIEW_POMODORO) {
+                UIButtonAction action = ui.handleTouch(touchX, touchY);
+                switch (action) {
+                    case UI_ACTION_OPEN_WIFI:
+                        audio.playClick();
+                        currentView = VIEW_WIFI_SCAN;
+                        ui.drawWiFiScanView(wifi, true);
+                        wifi.scanNetworks();
+                        scanPage = 0;
+                        ui.drawWiFiScanView(wifi, false, scanPage);
+                        break;
+
+                    case UI_ACTION_PLAY_PAUSE:
+                        pomodoro.togglePlayPause();
+                        if (pomodoro.isRunning()) {
+                            audio.playStart();
+                            led.setMode(pomodoro.isFocus() ? LED_MODE_FOCUS : LED_MODE_BREAK);
+                        } else if (pomodoro.isPaused()) {
+                            audio.playPause();
+                            led.setMode(LED_MODE_PAUSED);
+                        }
+                        break;
+
+                    case UI_ACTION_RESET:
+                        audio.playClick();
+                        pomodoro.reset();
+                        led.setMode(LED_MODE_IDLE);
+                        break;
+
+                    case UI_ACTION_SKIP:
+                        audio.playSkip();
+                        pomodoro.skip();
                         led.setMode(pomodoro.isFocus() ? LED_MODE_FOCUS : LED_MODE_BREAK);
-                    } else if (pomodoro.isPaused()) {
-                        audio.playPause();
-                        led.setMode(LED_MODE_PAUSED);
-                    }
-                    break;
+                        break;
 
-                case UI_ACTION_RESET:
+                    case UI_ACTION_SELECT_25:
+                        if (!pomodoro.isRunning()) {
+                            audio.playClick();
+                            pomodoro.setFocusMinutes(25);
+                        }
+                        break;
+
+                    case UI_ACTION_SELECT_50:
+                        if (!pomodoro.isRunning()) {
+                            audio.playClick();
+                            pomodoro.setFocusMinutes(50);
+                        }
+                        break;
+
+                    case UI_ACTION_NONE:
+                    default:
+                        break;
+                }
+            } 
+            else if (currentView == VIEW_WIFI_SCAN) {
+                bool rescan = false, back = false, nextPage = false;
+                int selectedIdx = ui.handleWiFiScanTouch(touchX, touchY, wifi.getNetworkCount(), scanPage, &rescan, &back, &nextPage);
+
+                if (back) {
                     audio.playClick();
-                    pomodoro.reset();
-                    led.setMode(LED_MODE_IDLE);
-                    break;
-
-                case UI_ACTION_SKIP:
-                    audio.playSkip();
-                    pomodoro.skip();
-                    led.setMode(pomodoro.isFocus() ? LED_MODE_FOCUS : LED_MODE_BREAK);
-                    break;
-
-                case UI_ACTION_SELECT_25:
-                    if (!pomodoro.isRunning()) {
-                        audio.playClick();
-                        pomodoro.setFocusMinutes(25);
+                    currentView = VIEW_POMODORO;
+                    ui.fullRedraw(pomodoro, currentLdr, wifi.isConnected());
+                } else if (rescan) {
+                    audio.playClick();
+                    ui.drawWiFiScanView(wifi, true);
+                    wifi.scanNetworks();
+                    scanPage = 0;
+                    ui.drawWiFiScanView(wifi, false, scanPage);
+                } else if (nextPage) {
+                    audio.playClick();
+                    int totalP = (wifi.getNetworkCount() + 3) / 4;
+                    if (totalP > 0) {
+                        scanPage = (scanPage + 1) % totalP;
                     }
-                    break;
-
-                case UI_ACTION_SELECT_50:
-                    if (!pomodoro.isRunning()) {
-                        audio.playClick();
-                        pomodoro.setFocusMinutes(50);
-                    }
-                    break;
-
-                case UI_ACTION_NONE:
-                default:
-                    break;
+                    ui.drawWiFiScanView(wifi, false, scanPage);
+                } else if (selectedIdx >= 0) {
+                    audio.playClick();
+                    selectedSSID = wifi.getNetwork(selectedIdx).ssid;
+                    currentView = VIEW_WIFI_KEYBOARD;
+                    keyboard.reset(selectedSSID);
+                    keyboard.drawFull();
+                }
+            } 
+            else if (currentView == VIEW_WIFI_KEYBOARD) {
+                KeyAction kAction = keyboard.handleTouch(touchX, touchY);
+                if (kAction == KEY_ACTION_CHAR_TYPED || kAction == KEY_ACTION_DELETE) {
+                    audio.playClick();
+                } else if (kAction == KEY_ACTION_BACK) {
+                    audio.playClick();
+                    currentView = VIEW_WIFI_SCAN;
+                    ui.drawWiFiScanView(wifi, false, scanPage);
+                } else if (kAction == KEY_ACTION_SUBMIT) {
+                    audio.playStart();
+                    typedPassword = keyboard.getText();
+                    currentView = VIEW_WIFI_CONNECTING;
+                    ui.drawWiFiConnecting(selectedSSID);
+                    wifi.startConnect(selectedSSID, typedPassword);
+                }
+            } 
+            else if (currentView == VIEW_WIFI_RESULT) {
+                if (!connectionSuccess) {
+                    audio.playClick();
+                    currentView = VIEW_WIFI_SCAN;
+                    ui.drawWiFiScanView(wifi, false, scanPage);
+                }
             }
         }
     }
 
-    // 4. Actualización del reloj digital y barra de progreso en pantalla
-    ui.updateTimerDisplay(pomodoro, currentLdr);
+    // 5. Actualización periódica de la pantalla en vista Pomodoro
+    if (currentView == VIEW_POMODORO) {
+        ui.updateTimerDisplay(pomodoro, currentLdr, wifi.isConnected());
+    }
 
-    // 5. Ajuste de brillo suave y lectura de LDR cada 400 ms
+    // 6. Sensor LDR y ajuste suave de retroiluminación cada 400 ms
     if (millis() - lastLdrCheck >= 400) {
         lastLdrCheck = millis();
         currentLdr = analogRead(PIN_LDR);
 
-        // Mapeo suave de luminosidad: 4000 (oscuridad) -> 60 PWM, 500 (luz fuerte) -> 255 PWM
         int targetBrightness = map(currentLdr, 4000, 500, 70, 255);
         targetBrightness = constrain(targetBrightness, 70, 255);
 
-        // Transición suave de brillo
         if (abs(targetBrightness - currentBrightness) > 8) {
             currentBrightness += (targetBrightness > currentBrightness) ? 5 : -5;
             analogWrite(PIN_BACKLIGHT, currentBrightness);
         }
     }
 }
-
