@@ -1,0 +1,23 @@
+# Arduino & PlatformIO
+.pio/
+.vscode/
+build/
+*.bin
+*.elf
+*.hex
+*.d
+*.o
+
+# Sistema operativo y temporales
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.log
+
+# Entornos virtuales / Node
+__pycache__/
+node_modules/
+.env
+secrets.h
+credentials.h
