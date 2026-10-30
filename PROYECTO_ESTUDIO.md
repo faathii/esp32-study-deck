@@ -59,7 +59,7 @@ Dispositivo de escritorio dedicado exclusivamente a la concentración, productiv
 ## 📋 Fases del Proyecto
 
 - [x] **Fase 1:** Validación y calibración de hardware (TFT ILI9341, táctil capacitivo CST820, LED RGB, LDR y buzzer). ¡Completado y verificado!
-- [ ] **Fase 2:** Implementación del motor Pomodoro, estados y alertas (LED + Sonido).
+- [x] **Fase 2:** Implementación del motor Pomodoro, estados y alertas (LED + Sonido). ¡Completado y en funcionamiento!
 - [ ] **Fase 3:** Conexión Wi-Fi, sincronización de hora (NTP) y clima.
 - [ ] **Fase 4:** Integración con Google Calendar y Google Tasks.
 - [ ] **Fase 5:** Sistema de Flashcards y registro en MicroSD.
