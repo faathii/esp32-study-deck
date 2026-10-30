@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include <time.h>
 #include "HardwareConfig.h"
 #include "CST820.h"
 #include "AudioNotifier.h"
@@ -11,7 +12,7 @@
 #include "TaskManager.h"
 #include "FlashcardManager.h"
 
-// Instancias de periféricos y controladores
+// Periféricos y componentes
 TFT_eSPI tft = TFT_eSPI();
 CST820 touch(I2C_SDA_PIN, I2C_SCL_PIN, TP_RST_PIN, TP_INT_PIN);
 AudioNotifier audio;
@@ -23,23 +24,28 @@ KeyboardUI keyboard(tft);
 TaskManager taskMgr;
 FlashcardManager flashcards;
 
-// Estado de la aplicación
-AppView currentView = VIEW_POMODORO;
+// Estado de la interfaz (inicia en el Launcher estilo Android)
+AppView currentView = VIEW_HOME;
 int scanPage = 0;
 String selectedSSID = "";
 String typedPassword = "";
 unsigned long resultStartTime = 0;
 bool connectionSuccess = false;
 
-// Variables de control temporal
+// Control de hardware y tiempos
 unsigned long lastLdrCheck = 0;
 unsigned long lastTouchTime = 0;
 unsigned long lastClockUpdate = 0;
+int lastHomeMin = -1;
 int currentLdr = 2000;
 int currentBrightness = 220;
+bool autoBrightness = true;
 
 void refreshCurrentView() {
     switch (currentView) {
+        case VIEW_HOME:
+            ui.drawHomeScreen(pomodoro, taskMgr, wifi.isConnected(), currentLdr);
+            break;
         case VIEW_POMODORO:
             ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
             break;
@@ -52,6 +58,12 @@ void refreshCurrentView() {
         case VIEW_AGENDA:
             ui.drawAgendaView(wifi);
             break;
+        case VIEW_SETTINGS:
+            ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+            break;
+        case VIEW_WIFI_SCAN:
+            ui.drawWiFiScanView(wifi, false, scanPage);
+            break;
         default:
             break;
     }
@@ -63,6 +75,7 @@ void setup() {
     Serial.println("\n==============================================");
     Serial.println("  ESTACION DE ESTUDIO INTELIGENTE - STUDY DECK");
     Serial.println("  Hardware: Guition ESP32-2432S024C (2.4\")");
+    Serial.println("  Interfaz: Android App Launcher Grid");
     Serial.println("==============================================\n");
 
     // 1. Inicializar retroiluminación con nivel confortable
@@ -86,10 +99,10 @@ void setup() {
     // 5. Inicializar subsistema Wi-Fi
     wifi.begin();
 
-    // 6. Inicializar pantalla táctil y dibujar vista inicial
+    // 6. Inicializar pantalla táctil y dibujar Home Launcher
     ui.begin();
     touch.begin();
-    ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
+    ui.drawHomeScreen(pomodoro, taskMgr, wifi.isConnected(), currentLdr);
 
     // 7. Auto-conexión si hay credenciales guardadas en NVS
     if (wifi.hasSavedCredentials()) {
@@ -97,9 +110,9 @@ void setup() {
         wifi.startConnect(wifi.getSavedSSID(), wifi.getSavedPassword());
     }
 
-    // Sonido de bienvenida
+    // Sonido de inicio
     audio.playStart();
-    Serial.println("[Sistema] Study Deck listo y a la espera de interacción.");
+    Serial.println("[Sistema] Study Deck listo y a la espera de interaccion.");
 }
 
 void loop() {
@@ -110,7 +123,7 @@ void loop() {
     if (currentView == VIEW_WIFI_CONNECTING) {
         WiFiConnectStatus st = wifi.checkConnectStatus();
         if (st == WIFI_STATUS_CONNECTED) {
-            Serial.printf("[WiFi] Conectado con éxito. IP: %s\n", wifi.getLocalIP().c_str());
+            Serial.printf("[WiFi] Conectado con exito. IP: %s\n", wifi.getLocalIP().c_str());
             audio.playWorkFinished();
             wifi.saveCredentials(selectedSSID, typedPassword);
             
@@ -130,8 +143,8 @@ void loop() {
             resultStartTime = millis();
         }
     } else if (currentView == VIEW_WIFI_RESULT) {
-        if (connectionSuccess && (millis() - resultStartTime >= 3000)) {
-            currentView = VIEW_POMODORO;
+        if (connectionSuccess && (millis() - resultStartTime >= 2500)) {
+            currentView = VIEW_SETTINGS;
             refreshCurrentView();
         }
     }
@@ -142,23 +155,23 @@ void loop() {
         Serial.println("[Pomodoro] ¡Bloque de estudio completado! Iniciando descanso.");
         audio.playWorkFinished();
         led.setMode(LED_MODE_BREAK);
-        if (currentView == VIEW_POMODORO) {
-            ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
+        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME) {
+            refreshCurrentView();
         }
     } else if (event == POMO_EVENT_BREAK_COMPLETE) {
         Serial.println("[Pomodoro] ¡Descanso finalizado! Volviendo al modo enfoque.");
         audio.playBreakFinished();
         led.setMode(LED_MODE_FOCUS);
-        if (currentView == VIEW_POMODORO) {
-            ui.drawPomodoroView(pomodoro, currentLdr, wifi.isConnected());
+        if (currentView == VIEW_POMODORO || currentView == VIEW_HOME) {
+            refreshCurrentView();
         }
     }
 
-    // 4. Lectura táctil y de gestos
+    // 4. Lectura táctil
     uint16_t rawX = 0, rawY = 0;
     uint8_t gesture = GESTURE_NONE;
     if (touch.getRawTouch(&rawX, &rawY, &gesture)) {
-        if (millis() - lastTouchTime >= 220) {
+        if (millis() - lastTouchTime >= 200) {
             lastTouchTime = millis();
 
             // Transformar a coordenadas horizontales (320x240)
@@ -169,41 +182,45 @@ void loop() {
             if (touchY < 0) touchY = 0;
             if (touchY >= 240) touchY = 239;
 
-            // Soporte de gestos de deslizamiento entre pestañas principales (0..3)
-            if (currentView <= VIEW_AGENDA) {
-                if (gesture == GESTURE_SLIDE_LEFT) {
+            // --- VISTA 0: LAUNCHER HOME ESTILO ANDROID ---
+            if (currentView == VIEW_HOME) {
+                int appSelected = ui.handleHomeTouch(touchX, touchY);
+                if (appSelected == 1) { // Pomodoro
                     audio.playClick();
-                    currentView = (AppView)(((int)currentView + 1) % 4);
+                    currentView = VIEW_POMODORO;
                     refreshCurrentView();
-                    return;
-                } else if (gesture == GESTURE_SLIDE_RIGHT) {
+                } else if (appSelected == 2) { // Tareas
                     audio.playClick();
-                    currentView = (AppView)(((int)currentView + 3) % 4);
+                    currentView = VIEW_TODO;
                     refreshCurrentView();
-                    return;
-                }
-
-                // Detección de toque en la barra de pestañas inferior (y >= 204)
-                int tabSelected = ui.handleBottomTabsTouch(touchX, touchY);
-                if (tabSelected >= 0 && tabSelected != (int)currentView) {
+                } else if (appSelected == 3) { // Fichas Flashcards
                     audio.playClick();
-                    currentView = (AppView)tabSelected;
+                    currentView = VIEW_FLASH;
                     refreshCurrentView();
-                    return;
+                } else if (appSelected == 4) { // Agenda & Reloj
+                    audio.playClick();
+                    currentView = VIEW_AGENDA;
+                    refreshCurrentView();
+                } else if (appSelected == 5) { // Ajustes del Sistema
+                    audio.playClick();
+                    currentView = VIEW_SETTINGS;
+                    refreshCurrentView();
                 }
             }
-
-            // Gestión de toques según la vista activa
-            if (currentView == VIEW_POMODORO) {
+            // --- VISTA 1: APLICACIÓN POMODORO ---
+            else if (currentView == VIEW_POMODORO) {
                 UIButtonAction action = ui.handlePomodoroTouch(touchX, touchY);
                 switch (action) {
+                    case UI_ACTION_BACK_HOME:
+                        audio.playClick();
+                        currentView = VIEW_HOME;
+                        refreshCurrentView();
+                        break;
+
                     case UI_ACTION_OPEN_WIFI:
                         audio.playClick();
-                        currentView = VIEW_WIFI_SCAN;
-                        ui.drawWiFiScanView(wifi, true);
-                        wifi.scanNetworks();
-                        scanPage = 0;
-                        ui.drawWiFiScanView(wifi, false, scanPage);
+                        currentView = VIEW_SETTINGS;
+                        refreshCurrentView();
                         break;
 
                     case UI_ACTION_PLAY_PAUSE:
@@ -247,10 +264,15 @@ void loop() {
                         break;
                 }
             } 
+            // --- VISTA 2: APLICACIÓN TAREAS TO-DO ---
             else if (currentView == VIEW_TODO) {
-                bool resetTasks = false;
-                int taskIdx = ui.handleTodoTouch(touchX, touchY, &resetTasks);
-                if (resetTasks) {
+                bool resetTasks = false, back = false;
+                int taskIdx = ui.handleTodoTouch(touchX, touchY, &resetTasks, &back);
+                if (back) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
+                } else if (resetTasks) {
                     audio.playClick();
                     taskMgr.resetToDefaults();
                     ui.drawTodoView(taskMgr);
@@ -260,10 +282,15 @@ void loop() {
                     ui.drawTodoView(taskMgr);
                 }
             } 
+            // --- VISTA 3: APLICACIÓN FLASHCARDS ---
             else if (currentView == VIEW_FLASH) {
-                bool flipped = false, easy = false, hard = false;
-                if (ui.handleFlashcardTouch(touchX, touchY, &flipped, &easy, &hard)) {
-                    if (flipped) {
+                bool flipped = false, easy = false, hard = false, back = false;
+                if (ui.handleFlashcardTouch(touchX, touchY, &flipped, &easy, &hard, &back)) {
+                    if (back) {
+                        audio.playClick();
+                        currentView = VIEW_HOME;
+                        refreshCurrentView();
+                    } else if (flipped) {
                         audio.playClick();
                         flashcards.flip();
                         ui.drawFlashcardsView(flashcards);
@@ -278,17 +305,64 @@ void loop() {
                     }
                 }
             } 
+            // --- VISTA 4: APLICACIÓN AGENDA & RELOJ ---
             else if (currentView == VIEW_AGENDA) {
-                // Tocar en agenda refresca la vista
-                ui.drawAgendaView(wifi);
+                if (ui.handleAgendaTouch(touchX, touchY)) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
+                } else {
+                    ui.drawAgendaView(wifi);
+                }
             } 
+            // --- VISTA 5: APLICACIÓN AJUSTES DEL SISTEMA ---
+            else if (currentView == VIEW_SETTINGS) {
+                bool toggleAuto = false, briDown = false, briUp = false;
+                bool toggleMute = false, openWifi = false, clearWifi = false, back = false;
+                ui.handleSettingsTouch(touchX, touchY, &toggleAuto, &briDown, &briUp, 
+                                       &toggleMute, &openWifi, &clearWifi, &back);
+
+                if (back) {
+                    audio.playClick();
+                    currentView = VIEW_HOME;
+                    refreshCurrentView();
+                } else if (toggleAuto) {
+                    autoBrightness = !autoBrightness;
+                    audio.playClick();
+                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                } else if (briDown) {
+                    autoBrightness = false;
+                    currentBrightness = max(40, currentBrightness - 25);
+                    analogWrite(PIN_BACKLIGHT, currentBrightness);
+                    audio.playClick();
+                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                } else if (briUp) {
+                    autoBrightness = false;
+                    currentBrightness = min(255, currentBrightness + 25);
+                    analogWrite(PIN_BACKLIGHT, currentBrightness);
+                    audio.playClick();
+                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                } else if (toggleMute) {
+                    audio.toggleMute();
+                    if (!audio.isMuted()) audio.playClick();
+                    ui.drawSettingsView(wifi, currentBrightness, autoBrightness, audio.isMuted());
+                } else if (openWifi) {
+                    audio.playClick();
+                    currentView = VIEW_WIFI_SCAN;
+                    ui.drawWiFiScanView(wifi, true);
+                    wifi.scanNetworks();
+                    scanPage = 0;
+                    ui.drawWiFiScanView(wifi, false, scanPage);
+                }
+            }
+            // --- VISTAS WI-FI CONFIG ---
             else if (currentView == VIEW_WIFI_SCAN) {
                 bool rescan = false, back = false, nextPage = false;
                 int selectedIdx = ui.handleWiFiScanTouch(touchX, touchY, wifi.getNetworkCount(), scanPage, &rescan, &back, &nextPage);
 
                 if (back) {
                     audio.playClick();
-                    currentView = VIEW_POMODORO;
+                    currentView = VIEW_SETTINGS;
                     refreshCurrentView();
                 } else if (rescan) {
                     audio.playClick();
@@ -328,17 +402,27 @@ void loop() {
                 }
             } 
             else if (currentView == VIEW_WIFI_RESULT) {
+                audio.playClick();
                 if (!connectionSuccess) {
-                    audio.playClick();
                     currentView = VIEW_WIFI_SCAN;
                     ui.drawWiFiScanView(wifi, false, scanPage);
+                } else {
+                    currentView = VIEW_SETTINGS;
+                    refreshCurrentView();
                 }
             }
         }
     }
 
-    // 5. Actualizaciones periódicas de visualización
-    if (currentView == VIEW_POMODORO) {
+    // 5. Actualizaciones periódicas de visualización según la vista activa
+    if (currentView == VIEW_HOME) {
+        time_t now = time(nullptr);
+        struct tm *t = localtime(&now);
+        if (t->tm_min != lastHomeMin) {
+            lastHomeMin = t->tm_min;
+            ui.drawHomeScreen(pomodoro, taskMgr, wifi.isConnected(), currentLdr);
+        }
+    } else if (currentView == VIEW_POMODORO) {
         ui.updatePomodoroTimer(pomodoro, currentLdr, wifi.isConnected());
     } else if (currentView == VIEW_AGENDA) {
         if (millis() - lastClockUpdate >= 1000) {
@@ -347,8 +431,8 @@ void loop() {
         }
     }
 
-    // 6. Sensor LDR y ajuste suave de retroiluminación cada 400 ms
-    if (millis() - lastLdrCheck >= 400) {
+    // 6. Sensor LDR y ajuste suave de retroiluminación cada 400 ms si autoBrightness está activo
+    if (autoBrightness && (millis() - lastLdrCheck >= 400)) {
         lastLdrCheck = millis();
         currentLdr = analogRead(PIN_LDR);
 

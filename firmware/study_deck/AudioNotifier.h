@@ -11,24 +11,31 @@ public:
         digitalWrite(PIN_BUZZER, LOW);
     }
 
+    bool isMuted() const { return _muted; }
+    void setMuted(bool mute) { _muted = mute; }
+    void toggleMute() { _muted = !_muted; }
+
     void playClick() {
+        if (_muted) return;
         tone(PIN_BUZZER, 2400, 15);
     }
 
     void playStart() {
+        if (_muted) return;
         tone(PIN_BUZZER, 1760, 60);
         delay(70);
         tone(PIN_BUZZER, 2349, 100);
     }
 
     void playPause() {
+        if (_muted) return;
         tone(PIN_BUZZER, 2000, 60);
         delay(70);
         tone(PIN_BUZZER, 1500, 80);
     }
 
     void playWorkFinished() {
-        // Melodía de éxito al completar bloque de estudio
+        if (_muted) return;
         tone(PIN_BUZZER, 1568, 90);
         delay(110);
         tone(PIN_BUZZER, 1960, 90);
@@ -39,7 +46,7 @@ public:
     }
 
     void playBreakFinished() {
-        // Alerta de retorno al trabajo
+        if (_muted) return;
         tone(PIN_BUZZER, 2093, 100);
         delay(130);
         tone(PIN_BUZZER, 1760, 100);
@@ -48,11 +55,14 @@ public:
     }
 
     void playSkip() {
+        if (_muted) return;
         tone(PIN_BUZZER, 1800, 40);
         delay(50);
         tone(PIN_BUZZER, 2200, 40);
     }
+
+private:
+    bool _muted = false;
 };
 
 #endif // AUDIO_NOTIFIER_H
-

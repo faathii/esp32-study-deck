@@ -40,6 +40,7 @@ public:
     void disconnect();
 
     bool isConnected() const { return WiFi.status() == WL_CONNECTED; }
+    String getSSID() const { return WiFi.SSID(); }
     String getLocalIP() const { return WiFi.localIP().toString(); }
     int32_t getRSSI() const { return WiFi.RSSI(); }
 
