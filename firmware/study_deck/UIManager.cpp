@@ -1,27 +1,22 @@
 #include "UIManager.h"
 #include <time.h>
 
-// Paleta de colores estilo Android / Material Dark
-#define COLOR_BG          0x0821 // Fondo negro azulado profundo
-#define COLOR_STATUS_BAR  0x0000 // Negro puro barra de estado
-#define COLOR_CARD        0x18E3 // Tarjeta grafito
-#define COLOR_CARD_HL     0x2966 // Tarjeta activa
+// ============================================================================
+// PALETA MINIMALISTA Y SOBRIA (DARK MONOCHROME / SWISS PRECISION AESTHETIC)
+// Sin colorines, fondo negro absoluto (OLED), tarjetas grafito mate y alto contraste
+// ============================================================================
+#define COLOR_BG              0x0000 // Negro absoluto (OLED Pitch Black)
+#define COLOR_STATUS_BAR      0x0000 // Barra de estado integrada en negro puro
+#define COLOR_SEPARATOR       0x18C3 // Línea de separación sutil grafito (24, 24, 24)
 
-// Colores temáticos de las aplicaciones
-#define APP_COLOR_POMO    0xD164 // Rojo Coral
-#define APP_COLOR_TODO    0x2A9C // Azul Índigo
-#define APP_COLOR_FLASH   0xE4A2 // Naranja Ámbar
-#define APP_COLOR_AGENDA  0x1CA7 // Verde Esmeralda
-#define APP_COLOR_CONFIG  0x6A96 // Púrpura Ajustes
-#define APP_COLOR_INFO    0x21E7 // Grafito Azulado Info
+#define COLOR_CARD            0x1082 // Tarjeta grafito mate profundo (16, 16, 16)
+#define COLOR_CARD_HL         0x18C3 // Tarjeta activa / ranura (24, 24, 24)
+#define COLOR_BORDER          0x2945 // Borde fino sutil (41, 42, 41)
+#define COLOR_BORDER_HL       0xFFFF // Borde destacado blanco nítido
 
-#define COLOR_FOCUS_RED   0xF986
-#define COLOR_BREAK_GREEN 0x05E6
-#define COLOR_PAUSE_AMBER 0xFDA0
-#define COLOR_IDLE_BLUE   0x3BFF
-#define COLOR_TEXT_MUTED  0x9CD3
-#define COLOR_WIFI_OK     0x05E6
-#define COLOR_WIFI_OFF    0x4208
+#define COLOR_TEXT_PRIMARY    0xFFFF // Blanco nítido (alto contraste)
+#define COLOR_TEXT_SECONDARY  0xAD55 // Plata / Gris neutro medio (173, 170, 173)
+#define COLOR_TEXT_MUTED      0x632C // Gris grafito secundario (99, 97, 99)
 
 UIManager::UIManager(TFT_eSPI &tft) : _tft(tft) {}
 
@@ -32,7 +27,7 @@ void UIManager::begin() {
 }
 
 // ============================================================================
-// BARRA SUPERIOR UNIFICADA ESTILO ANDROID (STATUS BAR)
+// BARRA SUPERIOR UNIFICADA MINIMALISTA (STATUS BAR)
 // ============================================================================
 
 void UIManager::drawUnifiedStatusBar(const BatteryManager &battery, bool wifiConnected, 
@@ -50,68 +45,77 @@ void UIManager::drawUnifiedStatusBar(const BatteryManager &battery, bool wifiCon
         } else {
             snprintf(timeStr, sizeof(timeStr), "Study Deck");
         }
-        _tft.setTextColor(TFT_WHITE, COLOR_STATUS_BAR);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_STATUS_BAR);
         _tft.drawString(timeStr, 8, 4, 2);
     } else {
-        _tft.fillRoundRect(4, 2, 60, 20, 3, 0x18E3);
-        _tft.drawRoundRect(4, 2, 60, 20, 3, TFT_WHITE);
-        _tft.setTextColor(TFT_WHITE, 0x18E3);
+        _tft.fillRoundRect(4, 2, 60, 20, 3, COLOR_CARD);
+        _tft.drawRoundRect(4, 2, 60, 20, 3, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawCentreString("< INICIO", 34, 6, 1);
 
-        _tft.setTextColor(TFT_WHITE, COLOR_STATUS_BAR);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_STATUS_BAR);
         _tft.drawString(appTitle, 68, 4, 2);
     }
 
-    // 2. ZONA CENTRO: Racha e indicadores
+    // 2. ZONA CENTRO: Racha e indicadores sobrios
     char streakStr[16];
     snprintf(streakStr, sizeof(streakStr), "* %d", streakCount);
-    _tft.setTextColor(TFT_GOLD, COLOR_STATUS_BAR);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_STATUS_BAR);
     _tft.drawString(streakStr, 142, 4, 2);
 
     if (audioMuted) {
-        _tft.fillRoundRect(172, 3, 26, 18, 3, COLOR_FOCUS_RED);
-        _tft.setTextColor(TFT_WHITE, COLOR_FOCUS_RED);
+        _tft.fillRoundRect(172, 3, 26, 18, 3, COLOR_CARD);
+        _tft.drawRoundRect(172, 3, 26, 18, 3, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         _tft.drawCentreString("MUTE", 185, 6, 1);
     }
 
     if (autoBrightness) {
-        _tft.fillRoundRect(202, 3, 24, 18, 3, 0x19E8);
-        _tft.setTextColor(TFT_WHITE, 0x19E8);
+        _tft.fillRoundRect(202, 3, 24, 18, 3, COLOR_CARD);
+        _tft.drawRoundRect(202, 3, 24, 18, 3, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         _tft.drawCentreString("AUTO", 214, 6, 1);
     }
 
-    // 3. ZONA DERECHA: Wi-Fi y Batería
-    _tft.fillRoundRect(230, 3, 34, 18, 3, wifiConnected ? COLOR_WIFI_OK : COLOR_WIFI_OFF);
-    _tft.setTextColor(TFT_WHITE, wifiConnected ? COLOR_WIFI_OK : COLOR_WIFI_OFF);
+    // 3. ZONA DERECHA: Wi-Fi y Batería (diseño monocromo sobrio)
+    _tft.fillRoundRect(230, 3, 34, 18, 3, COLOR_CARD);
+    _tft.drawRoundRect(230, 3, 34, 18, 3, wifiConnected ? COLOR_BORDER_HL : COLOR_BORDER);
+    _tft.setTextColor(wifiConnected ? COLOR_TEXT_PRIMARY : COLOR_TEXT_MUTED, COLOR_CARD);
     _tft.drawCentreString(wifiConnected ? "WiFi" : "OFF", 247, 6, 1);
 
     int pct = battery.getPercentage();
     char pctStr[8];
     snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
-    _tft.setTextColor(battery.getStatusColor(), COLOR_STATUS_BAR);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_STATUS_BAR);
     _tft.drawRightString(pctStr, 298, 6, 1);
 
-    _tft.drawRoundRect(301, 6, 15, 11, 2, TFT_WHITE);
-    _tft.fillRect(316, 9, 2, 5, TFT_WHITE);
+    // Glifo minimalista de batería
+    _tft.drawRoundRect(301, 6, 15, 11, 2, COLOR_TEXT_PRIMARY);
+    _tft.fillRect(316, 9, 2, 5, COLOR_TEXT_PRIMARY);
     int fillW = map(constrain(pct, 0, 100), 0, 100, 1, 11);
-    _tft.fillRect(303, 8, fillW, 7, battery.getStatusColor());
+    _tft.fillRect(303, 8, fillW, 7, COLOR_TEXT_PRIMARY);
 
-    _tft.drawFastHLine(0, 24, 320, 0x2124);
+    _tft.drawFastHLine(0, 23, 320, COLOR_SEPARATOR);
 }
 
 // ============================================================================
-// 1. PANTALLA DE INICIO (ANDROID LAUNCHER CON WIDGET DE CLIMA)
+// 1. PANTALLA DE INICIO (LAUNCHER MINIMALISTA SOBRIO)
 // ============================================================================
 
-void UIManager::drawAppCard(int x, int y, int w, int h, uint16_t bgColor, const char *icon, const char *title, const char *subtitle) {
-    _tft.fillRoundRect(x, y, w, h, 8, bgColor);
-    _tft.drawRoundRect(x, y, w, h, 8, 0x4A69);
+void UIManager::drawAppCard(int x, int y, int w, int h, uint16_t /*bgColor*/, const char *icon, const char *title, const char *subtitle) {
+    // Tarjeta uniforme grafito mate oscuro con borde fino sobrio
+    _tft.fillRoundRect(x, y, w, h, 6, COLOR_CARD);
+    _tft.drawRoundRect(x, y, w, h, 6, COLOR_BORDER);
 
-    _tft.setTextColor(TFT_WHITE, bgColor);
+    // Monograma / Icono en blanco nítido
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString(icon, x + w / 2, y + 10, 4);
+
+    // Título de la app en blanco nítido
     _tft.drawCentreString(title, x + w / 2, y + 42, 2);
 
-    _tft.setTextColor(0xD6BA, bgColor);
+    // Subtítulo técnico en plata / gris neutro
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawCentreString(subtitle, x + w / 2, y + 62, 1);
 }
 
@@ -124,17 +128,17 @@ void UIManager::drawHomeScreen(const PomodoroEngine &engine, const TaskManager &
                          engine.getCompletedSessionsToday(), nullptr);
 
     // Encabezado "APLICACIONES" a la izquierda y WIDGET DE CLIMA a la derecha
-    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
-    _tft.drawString("APLICACIONES", 12, 30, 2);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
+    _tft.drawString("APLICACIONES", 12, 28, 2);
 
     if (weather.hasData()) {
-        _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_BG);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
         char wStr[32];
         snprintf(wStr, sizeof(wStr), "%s: %.1f C", weather.getCityName().c_str(), weather.getTemperature());
-        _tft.drawRightString(wStr, 308, 30, 2);
+        _tft.drawRightString(wStr, 308, 28, 2);
     } else if (wifiConnected) {
-        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_BG);
-        _tft.drawRightString("Clima: Conectando...", 308, 30, 1);
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+        _tft.drawRightString("Clima: Sincronizando...", 308, 30, 1);
     }
 
     char pomoSub[16];
@@ -157,15 +161,16 @@ void UIManager::drawHomeScreen(const PomodoroEngine &engine, const TaskManager &
         snprintf(batSub, sizeof(batSub), "%d%% (~%dh)", battery.getPercentage(), (int)battery.getEstimatedHoursLeft());
     }
 
+    // Cuadrícula 2x3 sobria: fondo grafito uniforme, sin colorines
     // FILA 1 (y: 48, h: 84)
-    drawAppCard(10, 48, 94, 84, APP_COLOR_POMO, "[T]", "Pomodoro", pomoSub);
-    drawAppCard(113, 48, 94, 84, APP_COLOR_TODO, "[V]", "Tareas", taskSub);
-    drawAppCard(216, 48, 94, 84, APP_COLOR_FLASH, "[?]", "Fichas", "Repaso");
+    drawAppCard(10, 48, 94, 84, COLOR_CARD, "[T]", "Pomodoro", pomoSub);
+    drawAppCard(113, 48, 94, 84, COLOR_CARD, "[V]", "Tareas", taskSub);
+    drawAppCard(216, 48, 94, 84, COLOR_CARD, "[F]", "Fichas", "Repaso");
 
     // FILA 2 (y: 140, h: 84)
-    drawAppCard(10, 140, 94, 84, APP_COLOR_AGENDA, "[#]", "Agenda", "Reloj/Clima");
-    drawAppCard(113, 140, 94, 84, APP_COLOR_CONFIG, "[*]", "Ajustes", batSub);
-    drawAppCard(216, 140, 94, 84, APP_COLOR_INFO, "[i]", "Info", "Deck OS");
+    drawAppCard(10, 140, 94, 84, COLOR_CARD, "[A]", "Agenda", "Reloj/Clima");
+    drawAppCard(113, 140, 94, 84, COLOR_CARD, "[*]", "Ajustes", batSub);
+    drawAppCard(216, 140, 94, 84, COLOR_CARD, "[i]", "Info", "Deck OS");
 }
 
 int UIManager::handleHomeTouch(int x, int y) {
@@ -189,7 +194,7 @@ int UIManager::handleHomeTouch(int x, int y) {
 }
 
 // ============================================================================
-// 2. APLICACIÓN POMODORO
+// 2. APLICACIÓN POMODORO MINIMALISTA
 // ============================================================================
 
 void UIManager::drawPomodoroView(const PomodoroEngine &engine, const BatteryManager &battery, 
@@ -241,22 +246,22 @@ void UIManager::drawModeButtons(const PomodoroEngine &engine) {
     bool is50 = (engine.getFocusMinutes() == 50);
     bool is90 = (engine.getFocusMinutes() == 90);
 
-    uint16_t bg25 = is25 ? 0x21E7 : COLOR_CARD;
-    _tft.fillRoundRect(15, 30, 85, 24, 4, bg25);
-    _tft.drawRoundRect(15, 30, 85, 24, 4, is25 ? COLOR_IDLE_BLUE : 0x3186);
-    _tft.setTextColor(is25 ? TFT_WHITE : COLOR_TEXT_MUTED, bg25);
+    // Botón 25 min (Invertido en blanco si está activo, grafito sobrio si inactivo)
+    _tft.fillRoundRect(15, 30, 85, 24, 4, is25 ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawRoundRect(15, 30, 85, 24, 4, is25 ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    _tft.setTextColor(is25 ? COLOR_BG : COLOR_TEXT_SECONDARY, is25 ? COLOR_TEXT_PRIMARY : COLOR_CARD);
     _tft.drawCentreString("25 min", 57, 34, 2);
 
-    uint16_t bg50 = is50 ? 0x21E7 : COLOR_CARD;
-    _tft.fillRoundRect(117, 30, 85, 24, 4, bg50);
-    _tft.drawRoundRect(117, 30, 85, 24, 4, is50 ? COLOR_IDLE_BLUE : 0x3186);
-    _tft.setTextColor(is50 ? TFT_WHITE : COLOR_TEXT_MUTED, bg50);
+    // Botón 50 min
+    _tft.fillRoundRect(117, 30, 85, 24, 4, is50 ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawRoundRect(117, 30, 85, 24, 4, is50 ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    _tft.setTextColor(is50 ? COLOR_BG : COLOR_TEXT_SECONDARY, is50 ? COLOR_TEXT_PRIMARY : COLOR_CARD);
     _tft.drawCentreString("50 min", 159, 34, 2);
 
-    uint16_t bg90 = is90 ? 0x21E7 : COLOR_CARD;
-    _tft.fillRoundRect(220, 30, 85, 24, 4, bg90);
-    _tft.drawRoundRect(220, 30, 85, 24, 4, is90 ? COLOR_IDLE_BLUE : 0x3186);
-    _tft.setTextColor(is90 ? TFT_WHITE : COLOR_TEXT_MUTED, bg90);
+    // Botón 90 min
+    _tft.fillRoundRect(220, 30, 85, 24, 4, is90 ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawRoundRect(220, 30, 85, 24, 4, is90 ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    _tft.setTextColor(is90 ? COLOR_BG : COLOR_TEXT_SECONDARY, is90 ? COLOR_TEXT_PRIMARY : COLOR_CARD);
     _tft.drawCentreString("90 min", 262, 34, 2);
 }
 
@@ -268,10 +273,9 @@ void UIManager::drawCountdown(const PomodoroEngine &engine) {
     char timeStr[16];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", mins, secs);
 
-    uint16_t timerColor = TFT_WHITE;
-    if (engine.getState() == POMO_STATE_FOCUS) timerColor = TFT_WHITE;
-    else if (engine.isPaused()) timerColor = COLOR_PAUSE_AMBER;
-    else if (engine.isBreak()) timerColor = COLOR_BREAK_GREEN;
+    // Blanco puro para enfoque activo, plata suave para descanso/pausa
+    uint16_t timerColor = COLOR_TEXT_PRIMARY;
+    if (engine.isPaused()) timerColor = COLOR_TEXT_SECONDARY;
 
     _tft.fillRect(20, 58, 280, 56, COLOR_BG);
     _tft.setTextColor(timerColor, COLOR_BG);
@@ -288,20 +292,18 @@ void UIManager::drawProgressBar(const PomodoroEngine &engine) {
     const int barW = 270;
     const int barH = 8;
 
-    uint16_t barFillColor = COLOR_IDLE_BLUE;
-    if (engine.getState() == POMO_STATE_FOCUS) barFillColor = COLOR_FOCUS_RED;
-    else if (engine.isBreak()) barFillColor = COLOR_BREAK_GREEN;
-    else if (engine.isPaused()) barFillColor = COLOR_PAUSE_AMBER;
+    // Ranura de la barra en grafito oscuro con borde
+    _tft.fillRoundRect(barX, barY, barW, barH, 4, COLOR_CARD_HL);
+    _tft.drawRoundRect(barX, barY, barW, barH, 4, COLOR_BORDER);
 
-    _tft.fillRoundRect(barX, barY, barW, barH, 4, 0x2124);
-
+    // Relleno minimalista en blanco nítido
     int fillW = (int)(progress * barW);
     if (fillW > 4) {
-        _tft.fillRoundRect(barX, barY, fillW, barH, 4, barFillColor);
+        _tft.fillRoundRect(barX, barY, fillW, barH, 4, COLOR_TEXT_PRIMARY);
     }
 
     _tft.fillRect(20, 136, 280, 16, COLOR_BG);
-    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
 
     const char *subtext = "Toca INICIAR para comenzar";
     if (engine.getState() == POMO_STATE_FOCUS) subtext = "Modo Enfoque - No Molestar";
@@ -313,29 +315,31 @@ void UIManager::drawProgressBar(const PomodoroEngine &engine) {
 }
 
 void UIManager::drawActionButtons(const PomodoroEngine &engine) {
-    _tft.fillRoundRect(15, 162, 85, 48, 8, COLOR_CARD);
-    _tft.drawRoundRect(15, 162, 85, 48, 8, 0x3186);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    // 1. REINICIAR (Izquierda - Grafito sobrio)
+    _tft.fillRoundRect(15, 162, 85, 48, 6, COLOR_CARD);
+    _tft.drawRoundRect(15, 162, 85, 48, 6, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString("REINICIAR", 57, 178, 2);
 
-    uint16_t playBtnColor = COLOR_BREAK_GREEN;
-    const char *playLabel = "INICIAR";
+    // 2. INICIAR / PAUSAR / SEGUIR (Centro - Botón de alto contraste)
     if (engine.isRunning()) {
-        playBtnColor = COLOR_PAUSE_AMBER;
-        playLabel = "PAUSAR";
-    } else if (engine.isPaused()) {
-        playBtnColor = COLOR_IDLE_BLUE;
-        playLabel = "SEGUIR";
+        // En marcha: botón grafito con doble borde blanco
+        _tft.fillRoundRect(110, 160, 100, 52, 6, COLOR_CARD);
+        _tft.drawRoundRect(110, 160, 100, 52, 6, COLOR_BORDER_HL);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawCentreString("PAUSAR", 160, 176, 2);
+    } else {
+        // Pausado o Inactivo: botón invertido blanco con texto negro
+        _tft.fillRoundRect(110, 160, 100, 52, 6, COLOR_TEXT_PRIMARY);
+        _tft.drawRoundRect(110, 160, 100, 52, 6, COLOR_TEXT_PRIMARY);
+        _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
+        _tft.drawCentreString(engine.isPaused() ? "SEGUIR" : "INICIAR", 160, 176, 2);
     }
 
-    _tft.fillRoundRect(110, 160, 100, 52, 10, playBtnColor);
-    _tft.drawRoundRect(110, 160, 100, 52, 10, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, playBtnColor);
-    _tft.drawCentreString(playLabel, 160, 176, 2);
-
-    _tft.fillRoundRect(220, 162, 85, 48, 8, COLOR_CARD);
-    _tft.drawRoundRect(220, 162, 85, 48, 8, 0x3186);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    // 3. SALTAR (Derecha - Grafito sobrio)
+    _tft.fillRoundRect(220, 162, 85, 48, 6, COLOR_CARD);
+    _tft.drawRoundRect(220, 162, 85, 48, 6, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString("SALTAR", 262, 178, 2);
 }
 
@@ -358,7 +362,7 @@ UIButtonAction UIManager::handlePomodoroTouch(int x, int y) {
 }
 
 // ============================================================================
-// 3. APLICACIÓN TAREAS TO-DO (INTERACTIVA 100% REAL)
+// 3. APLICACIÓN TAREAS TO-DO (MONOCROMO MINIMALISTA)
 // ============================================================================
 
 void UIManager::drawTodoView(const TaskManager &taskMgr, const BatteryManager &battery, bool wifiConnected) {
@@ -373,36 +377,41 @@ void UIManager::drawTodoView(const TaskManager &taskMgr, const BatteryManager &b
         int cardY = 30 + i * 32;
 
         _tft.fillRoundRect(12, cardY, 296, 28, 4, COLOR_CARD);
-        _tft.drawRoundRect(12, cardY, 296, 28, 4, task.completed ? COLOR_BREAK_GREEN : 0x3186);
+        _tft.drawRoundRect(12, cardY, 296, 28, 4, COLOR_BORDER);
 
-        _tft.fillRoundRect(18, cardY + 4, 20, 20, 3, task.completed ? COLOR_BREAK_GREEN : 0x10A2);
-        _tft.drawRoundRect(18, cardY + 4, 20, 20, 3, TFT_WHITE);
+        // Casilla de verificación minimalista
+        _tft.fillRoundRect(18, cardY + 4, 20, 20, 3, task.completed ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+        _tft.drawRoundRect(18, cardY + 4, 20, 20, 3, COLOR_BORDER);
         if (task.completed) {
-            _tft.setTextColor(TFT_WHITE, COLOR_BREAK_GREEN);
+            _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
             _tft.drawCentreString("V", 28, cardY + 6, 2);
         }
 
         String txt = task.text;
         if (txt.length() > 24) txt = txt.substring(0, 22) + "...";
-        _tft.setTextColor(task.completed ? COLOR_TEXT_MUTED : TFT_WHITE, COLOR_CARD);
+        _tft.setTextColor(task.completed ? COLOR_TEXT_MUTED : COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawString(txt, 44, cardY + 6, 2);
 
         if (task.completed) {
             _tft.drawFastHLine(44, cardY + 14, txt.length() * 7, COLOR_TEXT_MUTED);
         }
 
-        _tft.setTextColor(COLOR_FOCUS_RED, COLOR_CARD);
+        // Botón de eliminar en gris neutro sobrio
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
         _tft.drawCentreString("x", 294, cardY + 6, 2);
     }
 
-    _tft.fillRoundRect(12, 194, 142, 34, 5, 0x1A85);
-    _tft.drawRoundRect(12, 194, 142, 34, 5, COLOR_IDLE_BLUE);
-    _tft.setTextColor(TFT_WHITE, 0x1A85);
+    // Botonera inferior
+    // + NUEVA TAREA (Botón primario invertido blanco)
+    _tft.fillRoundRect(12, 194, 142, 34, 5, COLOR_TEXT_PRIMARY);
+    _tft.drawRoundRect(12, 194, 142, 34, 5, COLOR_TEXT_PRIMARY);
+    _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
     _tft.drawCentreString("+ NUEVA TAREA", 83, 203, 2);
 
-    _tft.fillRoundRect(166, 194, 142, 34, 5, 0x21E7);
-    _tft.drawRoundRect(166, 194, 142, 34, 5, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, 0x21E7);
+    // LIMPIAR HECHAS (Botón grafito)
+    _tft.fillRoundRect(166, 194, 142, 34, 5, COLOR_CARD);
+    _tft.drawRoundRect(166, 194, 142, 34, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawCentreString("LIMPIAR HECHAS", 237, 203, 2);
 }
 
@@ -444,7 +453,7 @@ int UIManager::handleTodoTouch(int x, int y, bool *outAdd, bool *outClear, int *
 }
 
 // ============================================================================
-// 4. APLICACIÓN FLASHCARDS (LEITNER 100% REAL)
+// 4. APLICACIÓN FLASHCARDS MINIMALISTA
 // ============================================================================
 
 void UIManager::drawFlashcardsView(const FlashcardManager &flashcards, const BatteryManager &battery, bool wifiConnected) {
@@ -457,26 +466,25 @@ void UIManager::drawFlashcardsView(const FlashcardManager &flashcards, const Bat
     drawUnifiedStatusBar(battery, wifiConnected, false, true, 0, headStr);
 
     bool flipped = flashcards.isFlipped();
-    uint16_t cardBg = flipped ? 0x0A85 : COLOR_CARD;
-    uint16_t cardBorder = flipped ? COLOR_BREAK_GREEN : COLOR_IDLE_BLUE;
 
-    _tft.fillRoundRect(15, 30, 290, 126, 8, cardBg);
-    _tft.drawRoundRect(15, 30, 290, 126, 8, cardBorder);
+    // Tarjeta grafito mate con borde destacado cuando está girada
+    _tft.fillRoundRect(15, 30, 290, 126, 6, COLOR_CARD);
+    _tft.drawRoundRect(15, 30, 290, 126, 6, flipped ? COLOR_BORDER_HL : COLOR_BORDER);
 
     if (!flipped) {
-        _tft.setTextColor(COLOR_IDLE_BLUE, cardBg);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         _tft.drawString(card.category, 25, 38, 2);
         _tft.drawRightString("[ PREGUNTA ]", 295, 38, 2);
 
-        _tft.setTextColor(TFT_WHITE, cardBg);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawCentreString(card.question, 160, 74, 4);
 
-        _tft.setTextColor(COLOR_TEXT_MUTED, cardBg);
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
         _tft.drawCentreString("[ Toca la tarjeta para ver respuesta ]", 160, 128, 2);
     } else {
-        _tft.setTextColor(COLOR_BREAK_GREEN, cardBg);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         _tft.drawString("RESPUESTA", 25, 36, 2);
-        _tft.setTextColor(TFT_WHITE, cardBg);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
 
         int lineY = 60;
         int lastPos = 0, nextPos = 0;
@@ -491,19 +499,23 @@ void UIManager::drawFlashcardsView(const FlashcardManager &flashcards, const Bat
         }
     }
 
-    _tft.fillRoundRect(12, 168, 92, 48, 6, COLOR_FOCUS_RED);
-    _tft.drawRoundRect(12, 168, 92, 48, 6, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, COLOR_FOCUS_RED);
+    // Botones de acción sobrios sin colorines
+    // DIFICIL (Grafito con borde)
+    _tft.fillRoundRect(12, 168, 92, 48, 6, COLOR_CARD);
+    _tft.drawRoundRect(12, 168, 92, 48, 6, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString("DIFICIL", 58, 184, 2);
 
-    _tft.fillRoundRect(114, 168, 92, 48, 6, 0x1A85);
-    _tft.drawRoundRect(114, 168, 92, 48, 6, COLOR_IDLE_BLUE);
-    _tft.setTextColor(TFT_WHITE, 0x1A85);
+    // + NUEVA (Grafito con borde sutil)
+    _tft.fillRoundRect(114, 168, 92, 48, 6, COLOR_CARD);
+    _tft.drawRoundRect(114, 168, 92, 48, 6, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawCentreString("+ NUEVA", 160, 184, 2);
 
-    _tft.fillRoundRect(216, 168, 92, 48, 6, COLOR_BREAK_GREEN);
-    _tft.drawRoundRect(216, 168, 92, 48, 6, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, COLOR_BREAK_GREEN);
+    // FACIL (Botón primario invertido blanco con texto negro)
+    _tft.fillRoundRect(216, 168, 92, 48, 6, COLOR_TEXT_PRIMARY);
+    _tft.drawRoundRect(216, 168, 92, 48, 6, COLOR_TEXT_PRIMARY);
+    _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
     _tft.drawCentreString("FACIL", 262, 184, 2);
 }
 
@@ -555,8 +567,8 @@ void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi
 
     // 1. Tarjeta Clima y Temperatura (Open-Meteo) (y: 110..150)
     _tft.fillRoundRect(12, 110, 296, 40, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 110, 296, 40, 5, COLOR_IDLE_BLUE);
-    _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
+    _tft.drawRoundRect(12, 110, 296, 40, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString("Clima actual (Open-Meteo):", 20, 114, 1);
 
     if (weather.hasData()) {
@@ -564,7 +576,7 @@ void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi
         snprintf(wLine, sizeof(wLine), "%s: %.1f C | %s | %d%% HR", 
                  weather.getCityName().c_str(), weather.getTemperature(), 
                  weather.getConditionText().c_str(), weather.getHumidity());
-        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawString(wLine, 20, 128, 2);
     } else {
         _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
@@ -576,23 +588,22 @@ void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi
     String examCountdown = calendar.getNextDeadlineCountdown(examTitle);
 
     _tft.fillRoundRect(12, 154, 296, 40, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 154, 296, 40, 5, COLOR_PAUSE_AMBER);
-    _tft.setTextColor(COLOR_PAUSE_AMBER, COLOR_CARD);
+    _tft.drawRoundRect(12, 154, 296, 40, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString("Proximo Examen:", 20, 158, 1);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString(examTitle, 20, 172, 2);
-    _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
     _tft.drawRightString(examCountdown, 298, 172, 2);
 
-    // 3. Botonera inferior: [+ EXAMEN] y [🌙 MODO NOCHE]
-    _tft.fillRoundRect(12, 198, 142, 34, 5, 0x21E7);
-    _tft.drawRoundRect(12, 198, 142, 34, 5, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, 0x21E7);
+    // 3. Botonera inferior: [+ EXAMEN] y [RELOJ NOCTURNO]
+    _tft.fillRoundRect(12, 198, 142, 34, 5, COLOR_TEXT_PRIMARY);
+    _tft.drawRoundRect(12, 198, 142, 34, 5, COLOR_TEXT_PRIMARY);
+    _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
     _tft.drawCentreString("+ EXAMEN", 83, 207, 2);
 
-    _tft.fillRoundRect(166, 198, 142, 34, 5, 0x18E3);
-    _tft.drawRoundRect(166, 198, 142, 34, 5, COLOR_PAUSE_AMBER);
-    _tft.setTextColor(COLOR_PAUSE_AMBER, 0x18E3);
+    _tft.fillRoundRect(166, 198, 142, 34, 5, COLOR_CARD);
+    _tft.drawRoundRect(166, 198, 142, 34, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawCentreString("RELOJ NOCTURNO", 237, 207, 2);
 }
 
@@ -614,11 +625,11 @@ void UIManager::updateAgendaClock(CalendarManager &calendar, const WeatherManage
     }
 
     _tft.fillRect(20, 28, 280, 50, COLOR_BG);
-    _tft.setTextColor(TFT_WHITE, COLOR_BG);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
     _tft.drawCentreString(timeStr, 160, 30, 7);
 
     _tft.fillRect(20, 80, 280, 22, COLOR_BG);
-    _tft.setTextColor(TFT_GOLD, COLOR_BG);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
     _tft.drawCentreString(dateStr, 160, 82, 2);
 }
 
@@ -652,12 +663,12 @@ bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outNight
 // ============================================================================
 
 void UIManager::drawNightClockView(const BatteryManager &battery, const WeatherManager &weather) {
-    _tft.fillScreen(0x0000); // Negro absoluto estilo OLED
+    _tft.fillScreen(COLOR_BG);
 
     updateNightClock(battery, weather);
 
     // Indicación sutil en la parte inferior
-    _tft.setTextColor(0x4208, 0x0000);
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
     _tft.drawCentreString("[ Toca en cualquier lugar para salir ]", 160, 220, 1);
 }
 
@@ -678,40 +689,39 @@ void UIManager::updateNightClock(const BatteryManager &battery, const WeatherMan
         snprintf(dateStr, sizeof(dateStr), "Modo Reloj Nocturno");
     }
 
-    // Reloj gigante en ámbar cálido tenue (0xFDA0)
-    _tft.fillRect(10, 36, 300, 68, 0x0000);
-    _tft.setTextColor(COLOR_PAUSE_AMBER, 0x0000);
+    // Reloj gigante en plata tenue antideslumbrante
+    _tft.fillRect(10, 36, 300, 68, COLOR_BG);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
     _tft.drawCentreString(timeStr, 160, 42, 7);
 
-    // Fecha en tono ámbar suave
-    _tft.fillRect(10, 114, 300, 24, 0x0000);
-    _tft.setTextColor(0xC580, 0x0000);
+    // Fecha en gris sutil
+    _tft.fillRect(10, 114, 300, 24, COLOR_BG);
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
     _tft.drawCentreString(dateStr, 160, 118, 2);
 
     // Línea de clima en modo nocturno
-    _tft.fillRect(10, 144, 300, 24, 0x0000);
+    _tft.fillRect(10, 144, 300, 24, COLOR_BG);
     if (weather.hasData()) {
         char wBuf[48];
         snprintf(wBuf, sizeof(wBuf), "%s %.1f C · %s", 
                  weather.getCityName().c_str(), weather.getTemperature(), weather.getConditionText().c_str());
-        _tft.setTextColor(0x5AEB, 0x0000); // Azul tenue
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
         _tft.drawCentreString(wBuf, 160, 148, 2);
     } else {
-        _tft.setTextColor(0x4208, 0x0000);
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
         _tft.drawCentreString("Ambiente Nocturno", 160, 148, 2);
     }
 
     // Estado de batería 5000mAh
-    _tft.fillRect(10, 174, 300, 24, 0x0000);
+    _tft.fillRect(10, 174, 300, 24, COLOR_BG);
     char batBuf[48];
     snprintf(batBuf, sizeof(batBuf), "Bateria: %d%% (%s)", battery.getPercentage(), battery.getRuntimeString().c_str());
-    _tft.setTextColor(0x0482, 0x0000); // Verde oliva tenue
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
     _tft.drawCentreString(batBuf, 160, 178, 2);
 }
 
-bool UIManager::handleNightClockTouch(int x, int y) {
-    // Cualquier pulsación sale del modo noche
-    return true;
+bool UIManager::handleNightClockTouch(int /*x*/, int /*y*/) {
+    return true; // Cualquier pulsación sale del modo noche
 }
 
 // ============================================================================
@@ -719,72 +729,76 @@ bool UIManager::handleNightClockTouch(int x, int y) {
 // ============================================================================
 
 void UIManager::drawSettingsView(const WiFiConfig &wifi, const BatteryManager &battery, 
-                                int brightness, bool autoBrightness, bool soundMuted, int timeoutMinutes) {
+                                int brightness, bool autoBrightness, bool soundMuted, int /*timeoutMinutes*/) {
     _tft.fillScreen(COLOR_BG);
     drawUnifiedStatusBar(battery, wifi.isConnected(), soundMuted, autoBrightness, 0, "AJUSTES");
 
     // 1. Tarjeta Batería LiPo 5000 mAh (y: 28..70)
     _tft.fillRoundRect(12, 28, 296, 44, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 28, 296, 44, 5, battery.getStatusColor());
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.drawRoundRect(12, 28, 296, 44, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString("Bateria 5000mAh 3.7V (18.5Wh)", 20, 34, 2);
 
     char batLine[48];
     snprintf(batLine, sizeof(batLine), "%d%% (%.2fV) | %s", 
              battery.getPercentage(), battery.getVoltage(), battery.getRuntimeString().c_str());
-    _tft.setTextColor(battery.getStatusColor(), COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString(batLine, 20, 52, 1);
 
     // 2. Tarjeta Brillo de Pantalla (y: 76..118)
     _tft.fillRoundRect(12, 76, 296, 44, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 76, 296, 44, 5, 0x3186);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.drawRoundRect(12, 76, 296, 44, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString("Brillo Pantalla", 20, 82, 2);
 
     char briStr[16];
     snprintf(briStr, sizeof(briStr), "%d%%", (brightness * 100) / 255);
-    _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString(briStr, 20, 98, 2);
 
-    _tft.fillRoundRect(115, 82, 34, 30, 4, 0x2A6B);
-    _tft.setTextColor(TFT_WHITE, 0x2A6B);
+    _tft.fillRoundRect(115, 82, 34, 30, 4, COLOR_CARD_HL);
+    _tft.drawRoundRect(115, 82, 34, 30, 4, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD_HL);
     _tft.drawCentreString("-", 132, 88, 4);
 
-    _tft.fillRoundRect(155, 82, 34, 30, 4, 0x2A6B);
-    _tft.setTextColor(TFT_WHITE, 0x2A6B);
+    _tft.fillRoundRect(155, 82, 34, 30, 4, COLOR_CARD_HL);
+    _tft.drawRoundRect(155, 82, 34, 30, 4, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD_HL);
     _tft.drawCentreString("+", 172, 88, 4);
 
-    uint16_t ldrBg = autoBrightness ? COLOR_BREAK_GREEN : 0x10A2;
-    _tft.fillRoundRect(198, 82, 102, 30, 4, ldrBg);
-    _tft.setTextColor(TFT_WHITE, ldrBg);
+    // Auto LDR toggle
+    _tft.fillRoundRect(198, 82, 102, 30, 4, autoBrightness ? COLOR_TEXT_PRIMARY : COLOR_CARD_HL);
+    _tft.drawRoundRect(198, 82, 102, 30, 4, COLOR_BORDER);
+    _tft.setTextColor(autoBrightness ? COLOR_BG : COLOR_TEXT_SECONDARY, autoBrightness ? COLOR_TEXT_PRIMARY : COLOR_CARD_HL);
     _tft.drawCentreString(autoBrightness ? "Auto LDR" : "Manual", 249, 88, 2);
 
     // 3. Tarjeta Sonido y Modo Noche (y: 124..166)
     _tft.fillRoundRect(12, 124, 296, 44, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 124, 296, 44, 5, 0x3186);
+    _tft.drawRoundRect(12, 124, 296, 44, 5, COLOR_BORDER);
     
-    uint16_t soundBg = soundMuted ? COLOR_FOCUS_RED : COLOR_BREAK_GREEN;
-    _tft.fillRoundRect(20, 130, 130, 30, 4, soundBg);
-    _tft.setTextColor(TFT_WHITE, soundBg);
+    _tft.fillRoundRect(20, 130, 130, 30, 4, soundMuted ? COLOR_CARD_HL : COLOR_TEXT_PRIMARY);
+    _tft.drawRoundRect(20, 130, 130, 30, 4, COLOR_BORDER);
+    _tft.setTextColor(soundMuted ? COLOR_TEXT_MUTED : COLOR_BG, soundMuted ? COLOR_CARD_HL : COLOR_TEXT_PRIMARY);
     _tft.drawCentreString(soundMuted ? "SILENCIO" : "SONIDO ON", 85, 136, 2);
 
-    _tft.fillRoundRect(165, 130, 135, 30, 4, 0x18E3);
-    _tft.drawRoundRect(165, 130, 135, 30, 4, COLOR_PAUSE_AMBER);
-    _tft.setTextColor(COLOR_PAUSE_AMBER, 0x18E3);
+    _tft.fillRoundRect(165, 130, 135, 30, 4, COLOR_CARD);
+    _tft.drawRoundRect(165, 130, 135, 30, 4, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString("MODO NOCHE", 232, 136, 2);
 
     // 4. Tarjeta Wi-Fi (y: 172..218)
     _tft.fillRoundRect(12, 172, 296, 48, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 172, 296, 48, 5, 0x3186);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.drawRoundRect(12, 172, 296, 48, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString("Red Wi-Fi", 20, 178, 2);
 
     String netInfo = wifi.isConnected() ? ("Conectado: " + wifi.getSSID()) : "Desconectado";
-    _tft.setTextColor(wifi.isConnected() ? COLOR_BREAK_GREEN : COLOR_PAUSE_AMBER, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString(netInfo, 20, 198, 1);
 
-    _tft.fillRoundRect(200, 178, 100, 34, 4, COLOR_IDLE_BLUE);
-    _tft.setTextColor(TFT_WHITE, COLOR_IDLE_BLUE);
+    _tft.fillRoundRect(200, 178, 100, 34, 4, COLOR_TEXT_PRIMARY);
+    _tft.drawRoundRect(200, 178, 100, 34, 4, COLOR_TEXT_PRIMARY);
+    _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
     _tft.drawCentreString("CONFIG", 250, 186, 2);
 }
 
@@ -837,45 +851,44 @@ void UIManager::drawInfoView(const BatteryManager &battery, StorageManager &stor
                          pomodoro.getCompletedSessionsToday(), "INFO & STATS");
 
     _tft.fillRoundRect(12, 30, 296, 54, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 30, 296, 54, 5, COLOR_BREAK_GREEN);
-    _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
+    _tft.drawRoundRect(12, 30, 296, 54, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString("Registro de Estudio Real", 20, 36, 2);
 
     char statBuf[64];
     int totalMins = storage.getTotalStudyMinutes();
     snprintf(statBuf, sizeof(statBuf), "Sesiones Hoy: %d | Total en MicroSD: %d min", 
              pomodoro.getCompletedSessionsToday(), totalMins);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString(statBuf, 20, 56, 2);
 
     _tft.fillRoundRect(12, 90, 296, 48, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 90, 296, 48, 5, storage.isAvailable() ? COLOR_IDLE_BLUE : 0x3186);
-    _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
+    _tft.drawRoundRect(12, 90, 296, 48, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString("Almacenamiento MicroSD", 20, 96, 2);
 
     char sdBuf[56];
     if (storage.isAvailable()) {
         snprintf(sdBuf, sizeof(sdBuf), "Montada (%llu MB) | /study_log.csv OK", storage.getCardSizeMB());
-        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
     } else {
         snprintf(sdBuf, sizeof(sdBuf), "Modo NVS interno (SD no insertada)");
-        _tft.setTextColor(COLOR_PAUSE_AMBER, COLOR_CARD);
     }
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString(sdBuf, 20, 114, 1);
 
     _tft.fillRoundRect(12, 144, 296, 76, 5, COLOR_CARD);
-    _tft.drawRoundRect(12, 144, 296, 76, 5, 0x3186);
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.drawRoundRect(12, 144, 296, 76, 5, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawString("Hardware: Guition ESP32-2432S024C", 20, 150, 2);
 
     char hwBuf[64];
     snprintf(hwBuf, sizeof(hwBuf), "CPU: 240MHz | RAM: %d KB | Bat: 5000mAh (%.2fV)", 
              ESP.getFreeHeap() / 1024, battery.getVoltage());
-    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
     _tft.drawString(hwBuf, 20, 172, 1);
 
-    _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
-    _tft.drawString("Study Deck OS v1.1.0 - Codigo Abierto MIT", 20, 192, 2);
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+    _tft.drawString("Study Deck OS v1.2.0 - Codigo Abierto MIT", 20, 192, 2);
 }
 
 bool UIManager::handleInfoTouch(int x, int y) {
@@ -894,7 +907,7 @@ void UIManager::drawWiFiScanView(const WiFiConfig &wifi, const BatteryManager &b
     drawUnifiedStatusBar(battery, wifi.isConnected(), false, true, 0, "REDES WI-FI");
 
     if (scanning) {
-        _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_BG);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
         _tft.drawCentreString("Buscando redes en el aire...", 160, 100, 2);
         _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
         _tft.drawCentreString("Espera un momento", 160, 125, 2);
@@ -903,7 +916,7 @@ void UIManager::drawWiFiScanView(const WiFiConfig &wifi, const BatteryManager &b
 
     int totalNetworks = wifi.getNetworkCount();
     if (totalNetworks == 0) {
-        _tft.setTextColor(COLOR_PAUSE_AMBER, COLOR_BG);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
         _tft.drawCentreString("No se han encontrado redes.", 160, 100, 2);
         _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
         _tft.drawCentreString("Toca 'ESCANEAR' para reintentar.", 160, 125, 2);
@@ -917,39 +930,39 @@ void UIManager::drawWiFiScanView(const WiFiConfig &wifi, const BatteryManager &b
             int cardY = 32 + i * 36;
 
             _tft.fillRoundRect(12, cardY, 296, 32, 6, COLOR_CARD);
-            _tft.drawRoundRect(12, cardY, 296, 32, 6, 0x3186);
+            _tft.drawRoundRect(12, cardY, 296, 32, 6, COLOR_BORDER);
 
             String name = net.ssid;
             if (name.length() > 20) {
                 name = name.substring(0, 18) + "...";
             }
-            _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+            _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
             _tft.drawString(name, 22, cardY + 8, 2);
 
             String info = (net.isEncrypted ? "[*] " : "[Abierta] ");
             info += String(net.rssi) + " dBm";
-            _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+            _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
             _tft.drawRightString(info, 298, cardY + 8, 2);
         }
     }
 
-    _tft.fillRoundRect(12, 194, 85, 36, 6, 0xC8A2);
-    _tft.drawRoundRect(12, 194, 85, 36, 6, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, 0xC8A2);
+    _tft.fillRoundRect(12, 194, 85, 36, 6, COLOR_CARD);
+    _tft.drawRoundRect(12, 194, 85, 36, 6, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString("VOLVER", 54, 204, 2);
 
     if (totalNetworks > 4) {
         _tft.fillRoundRect(105, 194, 95, 36, 6, COLOR_CARD);
-        _tft.drawRoundRect(105, 194, 95, 36, 6, 0x3186);
-        _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+        _tft.drawRoundRect(105, 194, 95, 36, 6, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         char pagStr[16];
         snprintf(pagStr, sizeof(pagStr), "Pag %d/%d", page + 1, (totalNetworks + 3) / 4);
         _tft.drawCentreString(pagStr, 152, 204, 2);
     }
 
-    _tft.fillRoundRect(208, 194, 100, 36, 6, COLOR_IDLE_BLUE);
-    _tft.drawRoundRect(208, 194, 100, 36, 6, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, COLOR_IDLE_BLUE);
+    _tft.fillRoundRect(208, 194, 100, 36, 6, COLOR_TEXT_PRIMARY);
+    _tft.drawRoundRect(208, 194, 100, 36, 6, COLOR_TEXT_PRIMARY);
+    _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
     _tft.drawCentreString("ESCANEAR", 258, 204, 2);
 }
 
@@ -994,13 +1007,13 @@ int UIManager::handleWiFiScanTouch(int x, int y, int netCount, int page, bool *o
 void UIManager::drawWiFiConnecting(const String &ssid) {
     _tft.fillScreen(COLOR_BG);
 
-    _tft.fillRoundRect(30, 45, 260, 150, 10, COLOR_CARD);
-    _tft.drawRoundRect(30, 45, 260, 150, 10, COLOR_IDLE_BLUE);
+    _tft.fillRoundRect(30, 45, 260, 150, 8, COLOR_CARD);
+    _tft.drawRoundRect(30, 45, 260, 150, 8, COLOR_BORDER);
 
-    _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString("Conectando a la red...", 160, 65, 2);
 
-    _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
     _tft.drawCentreString(ssid, 160, 95, 4);
 
     _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
@@ -1010,33 +1023,33 @@ void UIManager::drawWiFiConnecting(const String &ssid) {
 void UIManager::drawWiFiResult(bool success, const String &info) {
     _tft.fillScreen(COLOR_BG);
 
-    uint16_t borderColor = success ? COLOR_BREAK_GREEN : COLOR_FOCUS_RED;
-    _tft.fillRoundRect(30, 40, 260, 160, 10, COLOR_CARD);
-    _tft.drawRoundRect(30, 40, 260, 160, 10, borderColor);
+    _tft.fillRoundRect(30, 40, 260, 160, 8, COLOR_CARD);
+    _tft.drawRoundRect(30, 40, 260, 160, 8, COLOR_BORDER_HL);
 
     if (success) {
-        _tft.setTextColor(COLOR_BREAK_GREEN, COLOR_CARD);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawCentreString("CONEXION EXITOSA", 160, 58, 4);
 
-        _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         _tft.drawCentreString("IP asignada:", 160, 100, 2);
-        _tft.setTextColor(COLOR_IDLE_BLUE, COLOR_CARD);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawCentreString(info, 160, 122, 2);
 
         _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
         _tft.drawCentreString("Guardada en NVS. Volviendo...", 160, 160, 2);
     } else {
-        _tft.setTextColor(COLOR_FOCUS_RED, COLOR_CARD);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
         _tft.drawCentreString("FALLO DE CONEXION", 160, 58, 4);
 
-        _tft.setTextColor(TFT_WHITE, COLOR_CARD);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
         _tft.drawCentreString("No se pudo conectar.", 160, 105, 2);
 
         _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
         _tft.drawCentreString(info, 160, 130, 2);
 
-        _tft.fillRoundRect(85, 155, 150, 32, 6, COLOR_IDLE_BLUE);
-        _tft.setTextColor(TFT_WHITE, COLOR_IDLE_BLUE);
+        _tft.fillRoundRect(85, 155, 150, 32, 6, COLOR_TEXT_PRIMARY);
+        _tft.drawRoundRect(85, 155, 150, 32, 6, COLOR_TEXT_PRIMARY);
+        _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
         _tft.drawCentreString("REINTENTAR", 160, 162, 2);
     }
 }

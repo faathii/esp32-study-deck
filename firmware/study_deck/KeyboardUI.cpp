@@ -1,13 +1,13 @@
 #include "KeyboardUI.h"
 
-// Colores del teclado
-#define KB_COLOR_BG       0x0841 // Pizarra oscuro
-#define KB_COLOR_KEY      0x1CE7 // Gris tecla
-#define KB_COLOR_KEY_TXT  0xFFFF // Blanco
-#define KB_COLOR_SPECIAL  0x2A6B // Azul grisáceo para teclas especiales
-#define KB_COLOR_GREEN    0x05E6 // Verde conectar
-#define KB_COLOR_RED      0xC8A2 // Rojo cancelar
-#define KB_COLOR_BORDER   0x4208
+// Paleta minimalista y sobria para el teclado táctil
+#define KB_COLOR_BG       0x0000 // Negro absoluto (OLED)
+#define KB_COLOR_INPUT    0x1082 // Caja de texto grafito oscuro
+#define KB_COLOR_KEY      0x1082 // Tecla grafito mate
+#define KB_COLOR_KEY_TXT  0xFFFF // Blanco nítido
+#define KB_COLOR_SPECIAL  0x18C3 // Teclas especiales (DEL, MAY, 123)
+#define KB_COLOR_BORDER   0x2945 // Borde sutil fino
+#define KB_COLOR_BORDER_HL 0xFFFF // Borde blanco nítido
 
 KeyboardUI::KeyboardUI(TFT_eSPI &tft) : _tft(tft) {}
 
@@ -28,7 +28,7 @@ void KeyboardUI::drawFull() {
 
 void KeyboardUI::drawHeader() {
     _tft.fillRect(0, 0, 320, 28, KB_COLOR_BG);
-    _tft.setTextColor(TFT_WHITE, KB_COLOR_BG);
+    _tft.setTextColor(0xAD55, KB_COLOR_BG);
     
     // Título descriptivo (recortar si es muy largo)
     String title = _promptTitle;
@@ -40,8 +40,8 @@ void KeyboardUI::drawHeader() {
 
 void KeyboardUI::updateInputBox() {
     // Caja de texto (x: 10, y: 28, w: 255, h: 30)
-    _tft.fillRoundRect(10, 28, 255, 30, 4, 0x10A2);
-    _tft.drawRoundRect(10, 28, 255, 30, 4, 0x3BFF);
+    _tft.fillRoundRect(10, 28, 255, 30, 4, KB_COLOR_INPUT);
+    _tft.drawRoundRect(10, 28, 255, 30, 4, KB_COLOR_BORDER);
 
     // Texto de contraseña o texto plano
     String displayStr = "";
@@ -57,13 +57,13 @@ void KeyboardUI::updateInputBox() {
     }
     displayStr += "_"; // Cursor
 
-    _tft.setTextColor(TFT_WHITE, 0x10A2);
+    _tft.setTextColor(KB_COLOR_KEY_TXT, KB_COLOR_INPUT);
     _tft.drawString(displayStr, 18, 35, 2);
 
     // Botón Ojo (Ver / Ocultar) x: 270, y: 28, w: 40, h: 30
     _tft.fillRoundRect(270, 28, 40, 30, 4, KB_COLOR_SPECIAL);
     _tft.drawRoundRect(270, 28, 40, 30, 4, KB_COLOR_BORDER);
-    _tft.setTextColor(TFT_WHITE, KB_COLOR_SPECIAL);
+    _tft.setTextColor(0xAD55, KB_COLOR_SPECIAL);
     _tft.drawCentreString(_hidePassword ? "***" : "ABC", 290, 35, 2);
 }
 
@@ -112,25 +112,25 @@ void KeyboardUI::drawKeys() {
         _tft.drawCentreString(c, kx + 13, 134, 2);
     }
 
-    // Tecla Borrar [⌫] en columna 9 (x: 271, w: 39, h: 28)
+    // Tecla Borrar [DEL] en columna 9 (x: 271, w: 39, h: 28)
     _tft.fillRoundRect(271, 128, 39, 28, 4, KB_COLOR_SPECIAL);
     _tft.drawRoundRect(271, 128, 39, 28, 4, KB_COLOR_BORDER);
-    _tft.setTextColor(TFT_WHITE, KB_COLOR_SPECIAL);
+    _tft.setTextColor(KB_COLOR_KEY_TXT, KB_COLOR_SPECIAL);
     _tft.drawCentreString("DEL", 290, 134, 2);
 
     // FILA 4: Shift + Z - M + 123/SYM (y: 160, h: 28)
     // Tecla Shift / Mayúsculas (x: 10, w: 42, h: 28)
-    uint16_t shiftBg = (_mode == KB_MODE_UPPERCASE) ? 0x05E6 : KB_COLOR_SPECIAL;
-    _tft.fillRoundRect(10, 160, 42, 28, 4, shiftBg);
+    bool isUpper = (_mode == KB_MODE_UPPERCASE);
+    _tft.fillRoundRect(10, 160, 42, 28, 4, isUpper ? KB_COLOR_KEY_TXT : KB_COLOR_SPECIAL);
     _tft.drawRoundRect(10, 160, 42, 28, 4, KB_COLOR_BORDER);
-    _tft.setTextColor(TFT_WHITE, shiftBg);
+    _tft.setTextColor(isUpper ? KB_COLOR_BG : KB_COLOR_KEY_TXT, isUpper ? KB_COLOR_KEY_TXT : KB_COLOR_SPECIAL);
     _tft.drawCentreString("MAY", 31, 166, 2);
 
     // Letras Z - M (7 teclas)
     const char *row4_lower = "zxcvbnm";
     const char *row4_upper = "ZXCVBNM";
     const char *row4_sym   = "~`|#%&*";
-    const char *r4 = (_mode == KB_MODE_SYMBOLS) ? row4_sym : ((_mode == KB_MODE_UPPERCASE) ? row4_upper : row4_lower);
+    const char *r4 = (_mode == KB_MODE_SYMBOLS) ? row4_sym : (isUpper ? row4_upper : row4_lower);
 
     for (int i = 0; i < 7; i++) {
         int kx = 56 + i * 28;
@@ -142,30 +142,31 @@ void KeyboardUI::drawKeys() {
     }
 
     // Tecla [?123 / SYM] (x: 254, w: 56, h: 28)
-    uint16_t symBg = (_mode == KB_MODE_SYMBOLS) ? 0x05E6 : KB_COLOR_SPECIAL;
-    _tft.fillRoundRect(254, 160, 56, 28, 4, symBg);
+    bool isSym = (_mode == KB_MODE_SYMBOLS);
+    _tft.fillRoundRect(254, 160, 56, 28, 4, isSym ? KB_COLOR_KEY_TXT : KB_COLOR_SPECIAL);
     _tft.drawRoundRect(254, 160, 56, 28, 4, KB_COLOR_BORDER);
-    _tft.setTextColor(TFT_WHITE, symBg);
-    _tft.drawCentreString((_mode == KB_MODE_SYMBOLS) ? "ABC" : "123", 282, 166, 2);
+    _tft.setTextColor(isSym ? KB_COLOR_BG : KB_COLOR_KEY_TXT, isSym ? KB_COLOR_KEY_TXT : KB_COLOR_SPECIAL);
+    _tft.drawCentreString(isSym ? "ABC" : "123", 282, 166, 2);
 
     // FILA 5: Barra de control inferior (y: 196, h: 36)
     // 1. [ ATRÁS ] (x: 10, w: 70, h: 36)
-    _tft.fillRoundRect(10, 196, 70, 36, 6, KB_COLOR_RED);
-    _tft.drawRoundRect(10, 196, 70, 36, 6, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, KB_COLOR_RED);
+    _tft.fillRoundRect(10, 196, 70, 36, 4, KB_COLOR_SPECIAL);
+    _tft.drawRoundRect(10, 196, 70, 36, 4, KB_COLOR_BORDER);
+    _tft.setTextColor(0xAD55, KB_COLOR_SPECIAL);
     _tft.drawCentreString("ATRAS", 45, 206, 2);
 
     // 2. [ ESPACIO ] (x: 88, w: 114, h: 36)
-    _tft.fillRoundRect(88, 196, 114, 36, 6, KB_COLOR_KEY);
-    _tft.drawRoundRect(88, 196, 114, 36, 6, KB_COLOR_BORDER);
+    _tft.fillRoundRect(88, 196, 114, 36, 4, KB_COLOR_KEY);
+    _tft.drawRoundRect(88, 196, 114, 36, 4, KB_COLOR_BORDER);
     _tft.setTextColor(KB_COLOR_KEY_TXT, KB_COLOR_KEY);
     _tft.drawCentreString("ESPACIO", 145, 206, 2);
 
-    // 3. [ CONECTAR ] (x: 210, w: 100, h: 36)
-    _tft.fillRoundRect(210, 196, 100, 36, 6, KB_COLOR_GREEN);
-    _tft.drawRoundRect(210, 196, 100, 36, 6, TFT_WHITE);
-    _tft.setTextColor(TFT_WHITE, KB_COLOR_GREEN);
-    _tft.drawCentreString("CONECTAR", 260, 206, 2);
+    // 3. [ CONFIRMAR / CONECTAR ] (x: 210, w: 100, h: 36)
+    // Botón invertido blanco con texto negro (sobrio y de máxima legibilidad)
+    _tft.fillRoundRect(210, 196, 100, 36, 4, KB_COLOR_KEY_TXT);
+    _tft.drawRoundRect(210, 196, 100, 36, 4, KB_COLOR_KEY_TXT);
+    _tft.setTextColor(KB_COLOR_BG, KB_COLOR_KEY_TXT);
+    _tft.drawCentreString("ACEPTAR", 260, 206, 2);
 }
 
 KeyAction KeyboardUI::handleTouch(int x, int y) {
@@ -293,7 +294,7 @@ KeyAction KeyboardUI::handleTouch(int x, int y) {
             return KEY_ACTION_CHAR_TYPED;
         }
 
-        // [ CONECTAR ] (x: 208..315)
+        // [ CONECTAR / ACEPTAR ] (x: 208..315)
         if (x >= 208 && x <= 315) {
             return KEY_ACTION_SUBMIT;
         }
@@ -301,4 +302,3 @@ KeyAction KeyboardUI::handleTouch(int x, int y) {
 
     return KEY_ACTION_NONE;
 }
-
