@@ -55,12 +55,36 @@ void TaskManager::toggleTask(int index) {
     }
 }
 
-void TaskManager::addTask(const String &text) {
+bool TaskManager::addTask(const String &text) {
+    if (text.length() == 0) return false;
     if (_taskCount < MAX_TASKS) {
         _tasks[_taskCount] = { text, false };
         _taskCount++;
         saveTasks();
+        return true;
     }
+    return false;
+}
+
+void TaskManager::deleteTask(int index) {
+    if (index >= 0 && index < _taskCount) {
+        for (int i = index; i < _taskCount - 1; i++) {
+            _tasks[i] = _tasks[i + 1];
+        }
+        _taskCount--;
+        saveTasks();
+    }
+}
+
+void TaskManager::clearCompleted() {
+    int writeIdx = 0;
+    for (int i = 0; i < _taskCount; i++) {
+        if (!_tasks[i].completed) {
+            _tasks[writeIdx++] = _tasks[i];
+        }
+    }
+    _taskCount = writeIdx;
+    saveTasks();
 }
 
 int TaskManager::getCompletedCount() const {
@@ -70,4 +94,3 @@ int TaskManager::getCompletedCount() const {
     }
     return c;
 }
-

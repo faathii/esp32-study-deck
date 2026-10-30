@@ -11,11 +11,12 @@
 
 KeyboardUI::KeyboardUI(TFT_eSPI &tft) : _tft(tft) {}
 
-void KeyboardUI::reset(const String &ssid) {
-    _targetSSID = ssid;
-    _inputText = "";
+void KeyboardUI::reset(const String &title, bool isPassword, const String &initialText) {
+    _promptTitle = title;
+    _isPassword = isPassword;
+    _inputText = initialText;
     _mode = KB_MODE_LOWERCASE;
-    _hidePassword = false;
+    _hidePassword = isPassword;
 }
 
 void KeyboardUI::drawFull() {
@@ -29,10 +30,10 @@ void KeyboardUI::drawHeader() {
     _tft.fillRect(0, 0, 320, 28, KB_COLOR_BG);
     _tft.setTextColor(TFT_WHITE, KB_COLOR_BG);
     
-    // Título con SSID (recortar si es muy largo)
-    String title = "Red: " + _targetSSID;
-    if (title.length() > 24) {
-        title = title.substring(0, 21) + "...";
+    // Título descriptivo (recortar si es muy largo)
+    String title = _promptTitle;
+    if (title.length() > 26) {
+        title = title.substring(0, 24) + "...";
     }
     _tft.drawString(title, 12, 6, 2);
 }
@@ -42,7 +43,7 @@ void KeyboardUI::updateInputBox() {
     _tft.fillRoundRect(10, 28, 255, 30, 4, 0x10A2);
     _tft.drawRoundRect(10, 28, 255, 30, 4, 0x3BFF);
 
-    // Texto de contraseña
+    // Texto de contraseña o texto plano
     String displayStr = "";
     if (_hidePassword) {
         for (size_t i = 0; i < _inputText.length(); i++) {
@@ -50,6 +51,9 @@ void KeyboardUI::updateInputBox() {
         }
     } else {
         displayStr = _inputText;
+    }
+    if (displayStr.length() > 22) {
+        displayStr = displayStr.substring(displayStr.length() - 22);
     }
     displayStr += "_"; // Cursor
 

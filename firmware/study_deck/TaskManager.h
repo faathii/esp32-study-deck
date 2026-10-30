@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 
-#define MAX_TASKS 5
+#define MAX_TASKS 6
 
 struct StudyTask {
     String text;
@@ -18,7 +18,9 @@ public:
     int getTaskCount() const { return _taskCount; }
     StudyTask getTask(int index) const;
     void toggleTask(int index);
-    void addTask(const String &text);
+    bool addTask(const String &text);
+    void deleteTask(int index);
+    void clearCompleted();
     void resetToDefaults();
     int getCompletedCount() const;
 
@@ -32,4 +34,3 @@ private:
 };
 
 #endif // TASK_MANAGER_H
-
