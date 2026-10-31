@@ -9,10 +9,16 @@ void CalendarManager::begin() {
 }
 
 void CalendarManager::loadDefaultEvents() {
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+    int cD = (t->tm_year > 120) ? t->tm_mday : 31;
+    int cM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
+    int cY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+
     _eventCount = 3;
-    _events[0] = { "Clase de Matematicas", "Aula 204", "09:00 - 11:00", 9, 0, 11, 0, false };
-    _events[1] = { "Sesion de Estudio Pomo", "Biblioteca", "16:00 - 18:30", 16, 0, 18, 30, true };
-    _events[2] = { "Entrega de Proyecto", "Campus Virtual", "20:00 - 21:00", 20, 0, 21, 0, false };
+    _events[0] = { "Clase de Matematicas", "Aula 204", "09:00 - 11:00", cD, cM, cY, 9, 0, 11, 0, false };
+    _events[1] = { "Sesion de Estudio Pomo", "Biblioteca", "16:00 - 18:30", cD, cM, cY, 16, 0, 18, 30, true };
+    _events[2] = { "Entrega de Proyecto", "Campus Virtual", "20:00 - 21:00", cD, cM, cY, 20, 0, 21, 0, false };
 }
 
 bool CalendarManager::isGoogleCalendarConfigured() const {
@@ -188,4 +194,61 @@ void CalendarManager::deleteDeadline(int index) {
         _deadlineCount--;
         saveDeadlines();
     }
+}
+
+int CalendarManager::getTodayEvents(CalendarEvent *outList, int maxOut) const {
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+    int cD = (t->tm_year > 120) ? t->tm_mday : 31;
+    int cM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
+    int cY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+
+    int matched = 0;
+    for (int i = 0; i < _eventCount && matched < maxOut; i++) {
+        if ((_events[i].day == cD && _events[i].month == cM && (_events[i].year == cY || _events[i].year == 0))
+            || (_events[i].day == 0)) {
+            outList[matched++] = _events[i];
+        }
+    }
+    if (matched == 0 && _eventCount > 0) {
+        for (int i = 0; i < _eventCount && matched < maxOut; i++) {
+            outList[matched++] = _events[i];
+        }
+    }
+    return matched;
+}
+
+bool CalendarManager::hasEventOnDate(int day, int month, int year) const {
+    for (int i = 0; i < _eventCount; i++) {
+        if (_events[i].day == day && _events[i].month == month && (_events[i].year == year || _events[i].year == 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CalendarManager::hasDeadlineOnDate(int day, int month, int year) const {
+    for (int i = 0; i < _deadlineCount; i++) {
+        if (_deadlines[i].targetDay == day && _deadlines[i].targetMonth == month && _deadlines[i].targetYear == year) {
+            return true;
+        }
+    }
+    return false;
+}
+
+String CalendarManager::getEventSummaryForDate(int day, int month, int year) const {
+    for (int i = 0; i < _deadlineCount; i++) {
+        if (_deadlines[i].targetDay == day && _deadlines[i].targetMonth == month && _deadlines[i].targetYear == year) {
+            return "[!] " + _deadlines[i].title;
+        }
+    }
+    for (int i = 0; i < _eventCount; i++) {
+        if (_events[i].day == day && _events[i].month == month && (_events[i].year == year || _events[i].year == 0)) {
+            if (_events[i].startHour > 0) {
+                return _events[i].timeRange.substring(0, 5) + " " + _events[i].title;
+            }
+            return _events[i].title;
+        }
+    }
+    return "";
 }

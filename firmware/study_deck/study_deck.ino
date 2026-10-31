@@ -214,6 +214,7 @@ void loop() {
             configTime(0, 0, "pool.ntp.org", "time.google.com");
             weather.update(true); // Forzar descarga inmediata de clima
             calendar.syncGoogleCalendar(true); // Forzar sincronización de Google Calendar
+            taskMgr.syncFromCalendar(calendar.getEvents(), calendar.getEventCount()); // Reflejar eventos en To-Do
             currentView = VIEW_WIFI_RESULT;
             ui.drawWiFiResult(true, wifi.getLocalIP());
             resultStartTime = millis();
@@ -493,7 +494,7 @@ void loop() {
             // --- VISTA 4: APLICACIÓN AGENDA & GOOGLE CALENDAR & EXÁMENES ---
             else if (currentView == VIEW_AGENDA) {
                 bool addExam = false, syncGCal = false, back = false;
-                if (ui.handleAgendaTouch(touchX, touchY, &addExam, &syncGCal, &back)) {
+                if (ui.handleAgendaTouch(touchX, touchY, calendar, &addExam, &syncGCal, &back)) {
                     if (back) {
                         audio.playClick();
                         currentView = VIEW_HOME;
@@ -506,6 +507,11 @@ void loop() {
                     } else if (syncGCal) {
                         audio.playClick();
                         calendar.syncGoogleCalendar(true);
+                        taskMgr.syncFromCalendar(calendar.getEvents(), calendar.getEventCount());
+                        refreshCurrentView();
+                    } else {
+                        // Cambio de filtro de vista (DÍA / SEMANA / MES) o paginación de mes
+                        audio.playClick();
                         refreshCurrentView();
                     }
                 }

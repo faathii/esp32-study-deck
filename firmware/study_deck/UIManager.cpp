@@ -571,98 +571,265 @@ bool UIManager::handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEa
 }
 
 // ============================================================================
-// 5. APLICACIÓN AGENDA & GOOGLE CALENDAR & EXÁMENES
+// 5. APLICACIÓN AGENDA & GOOGLE CALENDAR & EXÁMENES (DÍA / SEMANA / MES)
 // ============================================================================
 
 void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
                               const BatteryManager &battery, const WeatherManager &weather) {
     _tft.fillScreen(COLOR_BG);
-    drawUnifiedStatusBar(battery, wifi.isConnected(), false, true, 0, "GOOGLE CALENDAR");
+    drawUnifiedStatusBar(battery, wifi.isConnected(), false, true, 0, "CALENDARIO & AGENDA");
 
-    // Sub-encabezado: Hora actual y estado de sincronización GCal
-    updateAgendaClock(calendar, weather);
+    // 1. Selector de Filtros: [ DÍA ] [ SEMANA ] [ MES ] (y: 26..46)
+    CalendarViewMode mode = calendar.getViewMode();
 
-    // Estado GCal en sub-encabezado (y: 28)
-    _tft.setTextDatum(TR_DATUM);
-    if (!calendar.isGoogleCalendarConfigured()) {
-        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
-        _tft.drawString("GCal: Modo Local", 308, 30, 2);
-    } else if (calendar.isSynced()) {
-        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
-        _tft.drawString("GCal: OK", 308, 30, 2);
-    } else {
-        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
-        _tft.drawString("GCal: Pendiente", 308, 30, 2);
-    }
-    _tft.setTextDatum(TL_DATUM);
+    bool selDay = (mode == CAL_VIEW_DAY);
+    _tft.fillRoundRect(12, 26, 92, 20, 3, selDay ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawRoundRect(12, 26, 92, 20, 3, selDay ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    _tft.setTextColor(selDay ? COLOR_BG : COLOR_TEXT_SECONDARY, selDay ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawCentreString("DIA", 58, 29, 2);
 
-    // 1. Tarjetas de Eventos de Hoy (y: 50..152)
-    int evCount = calendar.getEventCount();
-    if (evCount > 0) {
-        int maxShow = evCount > 3 ? 3 : evCount;
-        for (int i = 0; i < maxShow; i++) {
-            CalendarEvent ev = calendar.getEvent(i);
-            int rowY = 50 + (i * 34);
+    bool selWeek = (mode == CAL_VIEW_WEEK);
+    _tft.fillRoundRect(114, 26, 92, 20, 3, selWeek ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawRoundRect(114, 26, 92, 20, 3, selWeek ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    _tft.setTextColor(selWeek ? COLOR_BG : COLOR_TEXT_SECONDARY, selWeek ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawCentreString("SEMANA", 160, 29, 2);
 
-            // Fondo de la tarjeta
-            _tft.fillRoundRect(12, rowY, 296, 30, 4, COLOR_CARD);
-            _tft.drawRoundRect(12, rowY, 296, 30, 4, ev.isOngoing ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    bool selMonth = (mode == CAL_VIEW_MONTH);
+    _tft.fillRoundRect(216, 26, 92, 20, 3, selMonth ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawRoundRect(216, 26, 92, 20, 3, selMonth ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+    _tft.setTextColor(selMonth ? COLOR_BG : COLOR_TEXT_SECONDARY, selMonth ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+    _tft.drawCentreString("MES", 262, 29, 2);
 
-            // Horario
-            _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-            _tft.drawString(ev.timeRange, 20, rowY + 8, 2);
+    // ========================================================================
+    // MODO 1: VISTA DE DÍA (DETALLE DE HOY)
+    // ========================================================================
+    if (mode == CAL_VIEW_DAY) {
+        updateAgendaClock(calendar, weather);
 
-            // Título del evento
-            String title = ev.title;
-            if (title.length() > 16) {
-                title = title.substring(0, 14) + "..";
-            }
-            _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-            _tft.drawString(title, 115, rowY + 8, 2);
-
-            // Indicador de "EN CURSO" o ubicación
-            if (ev.isOngoing) {
-                _tft.fillRoundRect(244, rowY + 5, 58, 20, 3, COLOR_TEXT_PRIMARY);
-                _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
-                _tft.drawCentreString("AHORA", 273, rowY + 8, 1);
-            } else if (ev.location.length() > 0) {
-                String loc = ev.location;
-                if (loc.length() > 10) loc = loc.substring(0, 8) + "..";
-                _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-                _tft.drawRightString(loc, 300, rowY + 8, 2);
-            }
-        }
-    } else {
-        // Sin eventos hoy o esperando sincronización
-        _tft.fillRoundRect(12, 50, 296, 98, 4, COLOR_CARD);
-        _tft.drawRoundRect(12, 50, 296, 98, 4, COLOR_BORDER);
-        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-        _tft.drawCentreString("Sin eventos de calendario para hoy", 160, 68, 2);
-
-        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+        _tft.setTextDatum(TR_DATUM);
         if (!calendar.isGoogleCalendarConfigured()) {
-            _tft.drawCentreString("Pon tu URL iCal secreta en Secrets.h", 160, 92, 1);
-            _tft.drawCentreString("o pulsa [SINCRONIZAR GCAL] para reintentar", 160, 108, 1);
+            _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+            _tft.drawString("GCal: Modo Local", 308, 52, 2);
+        } else if (calendar.isSynced()) {
+            _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+            _tft.drawString("GCal: OK", 308, 52, 2);
         } else {
-            _tft.drawCentreString("Tu agenda de Google Calendar esta sincronizada.", 160, 92, 1);
-            _tft.drawCentreString("Pulsa [SINCRONIZAR GCAL] para actualizar.", 160, 108, 1);
+            _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
+            _tft.drawString("GCal: Pendiente", 308, 52, 2);
+        }
+        _tft.setTextDatum(TL_DATUM);
+
+        // Tarjetas de Eventos de Hoy
+        CalendarEvent todayEvs[3];
+        int evCount = calendar.getTodayEvents(todayEvs, 3);
+        if (evCount > 0) {
+            for (int i = 0; i < evCount; i++) {
+                CalendarEvent ev = todayEvs[i];
+                int rowY = 70 + (i * 28);
+
+                _tft.fillRoundRect(12, rowY, 296, 25, 3, COLOR_CARD);
+                _tft.drawRoundRect(12, rowY, 296, 25, 3, ev.isOngoing ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+
+                _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+                _tft.drawString(ev.timeRange, 18, rowY + 5, 2);
+
+                String title = ev.title;
+                if (title.length() > 16) {
+                    title = title.substring(0, 14) + "..";
+                }
+                _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+                _tft.drawString(title, 115, rowY + 5, 2);
+
+                if (ev.isOngoing) {
+                    _tft.fillRoundRect(248, rowY + 3, 54, 18, 2, COLOR_TEXT_PRIMARY);
+                    _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
+                    _tft.drawCentreString("AHORA", 275, rowY + 5, 1);
+                } else if (ev.location.length() > 0) {
+                    String loc = ev.location;
+                    if (loc.length() > 10) loc = loc.substring(0, 8) + "..";
+                    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+                    _tft.drawRightString(loc, 300, rowY + 5, 2);
+                }
+            }
+        } else {
+            _tft.fillRoundRect(12, 70, 296, 80, 4, COLOR_CARD);
+            _tft.drawRoundRect(12, 70, 296, 80, 4, COLOR_BORDER);
+            _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+            _tft.drawCentreString("Sin eventos de calendario para hoy", 160, 88, 2);
+
+            _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+            if (!calendar.isGoogleCalendarConfigured()) {
+                _tft.drawCentreString("Pon tu URL iCal secreta en Secrets.h", 160, 110, 1);
+                _tft.drawCentreString("o pulsa [SINCRONIZAR GCAL] para reintentar", 160, 124, 1);
+            } else {
+                _tft.drawCentreString("Pulsa [SINCRONIZAR GCAL] para actualizar.", 160, 115, 1);
+            }
+        }
+
+        // Tarjeta Cuenta Regresiva de Exámenes / Hitos
+        String examTitle;
+        String examCountdown = calendar.getNextDeadlineCountdown(examTitle);
+
+        _tft.fillRoundRect(12, 154, 296, 36, 4, COLOR_CARD);
+        _tft.drawRoundRect(12, 154, 296, 36, 4, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+        _tft.drawString("Proximo Examen/Entrega:", 20, 158, 1);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawString(examTitle, 20, 170, 2);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+        _tft.drawRightString(examCountdown, 300, 170, 2);
+    }
+    // ========================================================================
+    // MODO 2: VISTA DE SEMANA COMPLETA (LUNES A DOMINGO)
+    // ========================================================================
+    else if (mode == CAL_VIEW_WEEK) {
+        time_t now = time(nullptr);
+        struct tm *t = localtime(&now);
+        int curY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+        int curM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
+        int curD = (t->tm_year > 120) ? t->tm_mday : 31;
+        int todayWDay = (t->tm_year > 120) ? ((t->tm_wday + 6) % 7) : 4;
+
+        time_t monTime = (t->tm_year > 120) ? (now - (todayWDay * 86400)) : now;
+        struct tm *monTm = localtime(&monTime);
+        int monDay = monTm->tm_mday;
+        int monMonth = monTm->tm_mon + 1;
+
+        time_t sunTime = monTime + (6 * 86400);
+        struct tm *sunTm = localtime(&sunTime);
+        int sunDay = sunTm->tm_mday;
+        int sunMonth = sunTm->tm_mon + 1;
+
+        const char *mesesShort[12] = { "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic" };
+        char wHead[48];
+        snprintf(wHead, sizeof(wHead), "Semana: %02d %s - %02d %s", monDay, mesesShort[monMonth - 1], sunDay, mesesShort[sunMonth - 1]);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
+        _tft.drawString(wHead, 16, 50, 2);
+
+        const char *dayNames[7] = { "LUN", "MAR", "MIE", "JUE", "VIE", "SAB", "DOM" };
+        for (int i = 0; i < 7; i++) {
+            time_t dayTime = monTime + (i * 86400);
+            struct tm *dTm = localtime(&dayTime);
+            int dNum = dTm->tm_mday;
+            int dMon = dTm->tm_mon + 1;
+            int dYear = dTm->tm_year + 1900;
+            bool isToday = (dNum == curD && dMon == curM && dYear == curY);
+
+            int rowY = 66 + i * 18;
+
+            _tft.fillRoundRect(12, rowY, 56, 16, 2, isToday ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+            _tft.drawRoundRect(12, rowY, 56, 16, 2, isToday ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+
+            char dStr[16];
+            snprintf(dStr, sizeof(dStr), "%s %02d", dayNames[i], dNum);
+            _tft.setTextColor(isToday ? COLOR_BG : COLOR_TEXT_SECONDARY, isToday ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+            _tft.drawCentreString(dStr, 40, rowY + 1, 1);
+
+            _tft.fillRoundRect(72, rowY, 236, 16, 2, COLOR_CARD);
+            _tft.drawRoundRect(72, rowY, 236, 16, 2, isToday ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
+
+            String sum = calendar.getEventSummaryForDate(dNum, dMon, dYear);
+            if (sum.length() > 0) {
+                if (sum.length() > 32) sum = sum.substring(0, 30) + "..";
+                _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+                _tft.drawString(sum, 78, rowY + 1, 1);
+            } else {
+                _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+                _tft.drawString(isToday ? "Hoy sin eventos agendados" : "-- Libre --", 78, rowY + 1, 1);
+            }
         }
     }
+    // ========================================================================
+    // MODO 3: VISTA DE MES ENTERO (GRID CALENDARIO)
+    // ========================================================================
+    else if (mode == CAL_VIEW_MONTH) {
+        time_t now = time(nullptr);
+        struct tm *t = localtime(&now);
+        int curY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+        int curM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
+        int curD = (t->tm_year > 120) ? t->tm_mday : 31;
 
-    // 2. Tarjeta Cuenta Regresiva de Exámenes / Hitos (y: 154..190)
-    String examTitle;
-    String examCountdown = calendar.getNextDeadlineCountdown(examTitle);
+        int dispM = curM + calendar.getMonthOffset();
+        int dispY = curY;
+        while (dispM > 12) { dispM -= 12; dispY++; }
+        while (dispM < 1)  { dispM += 12; dispY--; }
 
-    _tft.fillRoundRect(12, 154, 296, 36, 4, COLOR_CARD);
-    _tft.drawRoundRect(12, 154, 296, 36, 4, COLOR_BORDER);
-    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-    _tft.drawString("Proximo Examen/Entrega:", 20, 158, 1);
-    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-    _tft.drawString(examTitle, 20, 170, 2);
-    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-    _tft.drawRightString(examCountdown, 300, 170, 2);
+        const char *mesesFull[12] = { "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", 
+                                      "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE" };
 
-    // 3. Botonera inferior: [SINCRONIZAR GCAL] y [+ EXAMEN]
+        _tft.fillRoundRect(12, 48, 26, 16, 3, COLOR_CARD);
+        _tft.drawRoundRect(12, 48, 26, 16, 3, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawCentreString("<", 25, 49, 2);
+
+        char titleBuf[32];
+        snprintf(titleBuf, sizeof(titleBuf), "%s %d", mesesFull[dispM - 1], dispY);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+        _tft.drawCentreString(titleBuf, 160, 48, 2);
+
+        _tft.fillRoundRect(282, 48, 26, 16, 3, COLOR_CARD);
+        _tft.drawRoundRect(282, 48, 26, 16, 3, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawCentreString(">", 295, 49, 2);
+
+        const char *wNames[7] = { "L", "M", "X", "J", "V", "S", "D" };
+        for (int col = 0; col < 7; col++) {
+            int cx = 13 + col * 42 + 21;
+            _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+            _tft.drawCentreString(wNames[col], cx, 67, 1);
+        }
+        _tft.drawFastHLine(12, 77, 296, COLOR_BORDER);
+
+        int daysInM = 31;
+        if (dispM == 2) {
+            daysInM = (dispY % 4 == 0 && (dispY % 100 != 0 || dispY % 400 == 0)) ? 29 : 28;
+        } else if (dispM == 4 || dispM == 6 || dispM == 9 || dispM == 11) {
+            daysInM = 30;
+        }
+
+        struct tm firstDay = {0};
+        firstDay.tm_year = dispY - 1900;
+        firstDay.tm_mon = dispM - 1;
+        firstDay.tm_mday = 1;
+        mktime(&firstDay);
+        int startWDay = (firstDay.tm_wday + 6) % 7;
+
+        int row = 0;
+        int col = startWDay;
+        for (int day = 1; day <= daysInM; day++) {
+            int cellX = 13 + col * 42;
+            int cellY = 80 + row * 15;
+
+            bool isToday = (dispY == curY && dispM == curM && day == curD);
+            bool hasEvent = calendar.hasEventOnDate(day, dispM, dispY);
+            bool hasExam = calendar.hasDeadlineOnDate(day, dispM, dispY);
+
+            if (isToday) {
+                _tft.fillRoundRect(cellX + 8, cellY, 26, 14, 2, COLOR_TEXT_PRIMARY);
+                _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
+            } else {
+                _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+            }
+
+            _tft.drawCentreString(String(day), cellX + 21, cellY + 1, 1);
+
+            if (hasEvent || hasExam) {
+                uint16_t dotCol = isToday ? COLOR_BG : COLOR_TEXT_PRIMARY;
+                _tft.drawFastHLine(cellX + 16, cellY + 12, 10, dotCol);
+            }
+
+            col++;
+            if (col >= 7) {
+                col = 0;
+                row++;
+            }
+        }
+
+        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+        _tft.drawCentreString("Dias con linea tienen eventos o examenes", 160, 175, 1);
+    }
+
+    // 3. Botonera inferior común: [SINCRONIZAR GCAL] y [+ EXAMEN]
     _tft.fillRoundRect(12, 196, 142, 36, 4, COLOR_CARD);
     _tft.drawRoundRect(12, 196, 142, 36, 4, COLOR_BORDER);
     _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
@@ -674,7 +841,9 @@ void UIManager::drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi
     _tft.drawCentreString("+ EXAMEN", 237, 206, 2);
 }
 
-void UIManager::updateAgendaClock(CalendarManager &/*calendar*/, const WeatherManager &/*weather*/) {
+void UIManager::updateAgendaClock(CalendarManager &calendar, const WeatherManager &/*weather*/) {
+    if (calendar.getViewMode() != CAL_VIEW_DAY) return;
+
     time_t now = time(nullptr);
     struct tm *t = localtime(&now);
 
@@ -688,12 +857,12 @@ void UIManager::updateAgendaClock(CalendarManager &/*calendar*/, const WeatherMa
         snprintf(headerStr, sizeof(headerStr), "--:--:--  |  Hora pendiente");
     }
 
-    _tft.fillRect(12, 28, 195, 18, COLOR_BG);
+    _tft.fillRect(12, 50, 195, 18, COLOR_BG);
     _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
-    _tft.drawString(headerStr, 14, 30, 2);
+    _tft.drawString(headerStr, 14, 52, 2);
 }
 
-bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outSyncGCal, bool *outBack) {
+bool UIManager::handleAgendaTouch(int x, int y, CalendarManager &calendar, bool *outAddExam, bool *outSyncGCal, bool *outBack) {
     *outAddExam = false;
     *outSyncGCal = false;
     *outBack = false;
@@ -702,6 +871,34 @@ bool UIManager::handleAgendaTouch(int x, int y, bool *outAddExam, bool *outSyncG
     if (x >= 4 && x <= 64 && y >= 0 && y <= 24) {
         *outBack = true;
         return true;
+    }
+
+    // Pestañas de filtros superiores (y: 26..48)
+    if (y >= 26 && y <= 48) {
+        if (x >= 12 && x <= 104) {
+            calendar.setViewMode(CAL_VIEW_DAY);
+            return true;
+        } else if (x >= 114 && x <= 206) {
+            calendar.setViewMode(CAL_VIEW_WEEK);
+            return true;
+        } else if (x >= 216 && x <= 308) {
+            calendar.setViewMode(CAL_VIEW_MONTH);
+            return true;
+        }
+    }
+
+    // En vista MES: botones de navegación de mes [<] y [>]
+    if (calendar.getViewMode() == CAL_VIEW_MONTH && y >= 46 && y <= 66) {
+        if (x >= 12 && x <= 50) {
+            calendar.changeMonth(-1);
+            return true;
+        } else if (x >= 110 && x <= 210) {
+            calendar.resetMonth();
+            return true;
+        } else if (x >= 270 && x <= 308) {
+            calendar.changeMonth(1);
+            return true;
+        }
     }
 
     // Botón izquierdo: [ SINCRONIZAR GCAL ]

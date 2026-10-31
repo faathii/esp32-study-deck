@@ -3,8 +3,11 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include "GoogleCalendarClient.h"
 
-#define MAX_TASKS 6
+#define MAX_TASKS 10
+
+typedef GCalEvent CalendarEvent;
 
 struct StudyTask {
     String text;
@@ -23,6 +26,9 @@ public:
     void clearCompleted();
     void resetToDefaults();
     int getCompletedCount() const;
+
+    // Sincronización automática de eventos del calendario como tareas
+    int syncFromCalendar(const CalendarEvent *events, int eventCount);
 
 private:
     Preferences _prefs;

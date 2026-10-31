@@ -130,18 +130,30 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                 // Si no hay título, nombrar "Evento"
                 if (summary.length() == 0) summary = "Evento Google";
 
-                // Filtrado por fecha: si el reloj está sincronizado, preferir eventos de hoy o próximos
+                int evYear = 0, evMonth = 0, evDay = 0;
+                if (dtstart.length() >= 8) {
+                    evYear = dtstart.substring(0, 4).toInt();
+                    evMonth = dtstart.substring(4, 6).toInt();
+                    evDay = dtstart.substring(6, 8).toInt();
+                }
+
+                // Filtrado por fecha: aceptar eventos de hoy y próximos días de la semana/mes
+                bool accept = false;
                 bool isToday = false;
                 if (todayStr[0] != '\0' && dtstart.length() >= 8) {
-                    if (dtstart.startsWith(todayStr)) {
+                    String dtDate = dtstart.substring(0, 8);
+                    if (dtDate >= String(todayStr)) {
+                        accept = true;
+                    }
+                    if (dtDate == String(todayStr)) {
                         isToday = true;
                     }
                 } else {
-                    // Si el reloj no tiene hora exacta aún, aceptar los primeros eventos disponibles
+                    accept = true;
                     isToday = true;
                 }
 
-                if (isToday && outCount < maxEvents) {
+                if (accept && outCount < maxEvents) {
                     int sH = 9, sM = 0, eH = 10, eM = 0;
                     String timeRange = "Todo el dia";
 
@@ -180,7 +192,7 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         ongoing = (nowMins >= startMins && nowMins <= endMins);
                     }
 
-                    outEvents[outCount] = { summary, location, timeRange, sH, sM, eH, eM, ongoing };
+                    outEvents[outCount] = { summary, location, timeRange, evDay, evMonth, evYear, sH, sM, eH, eM, ongoing };
                     outCount++;
 
                     if (outCount >= maxEvents) {

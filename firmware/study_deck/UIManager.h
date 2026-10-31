@@ -83,7 +83,7 @@ public:
     void drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
                         const BatteryManager &battery, const WeatherManager &weather);
     void updateAgendaClock(CalendarManager &calendar, const WeatherManager &weather);
-    bool handleAgendaTouch(int x, int y, bool *outAddExam, bool *outSyncGCal, bool *outBack);
+    bool handleAgendaTouch(int x, int y, CalendarManager &calendar, bool *outAddExam, bool *outSyncGCal, bool *outBack);
 
     // --- 6. APLICACIÓN DEDICADA: ESTACIÓN DE CLIMA (OPEN-METEO) ---
     void drawWeatherView(const WeatherManager &weather, const BatteryManager &battery, bool wifiConnected);

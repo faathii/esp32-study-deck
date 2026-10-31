@@ -11,6 +11,9 @@ struct GCalEvent {
     String title;
     String location;
     String timeRange;
+    int day;
+    int month;
+    int year;
     int startHour;
     int startMin;
     int endHour;

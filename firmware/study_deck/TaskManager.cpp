@@ -94,3 +94,39 @@ int TaskManager::getCompletedCount() const {
     }
     return c;
 }
+
+int TaskManager::syncFromCalendar(const CalendarEvent *events, int eventCount) {
+    if (!events || eventCount <= 0) return 0;
+    int added = 0;
+
+    for (int i = 0; i < eventCount; i++) {
+        String title = events[i].title;
+        title.trim();
+        if (title.length() == 0) continue;
+
+        String taskText = "[CAL] " + title;
+        if (taskText.length() > 24) {
+            taskText = taskText.substring(0, 22) + "..";
+        }
+
+        bool exists = false;
+        for (int j = 0; j < _taskCount; j++) {
+            if (_tasks[j].text == taskText || _tasks[j].text.indexOf(title) != -1) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists && _taskCount < MAX_TASKS) {
+            _tasks[_taskCount] = { taskText, false };
+            _taskCount++;
+            added++;
+        }
+    }
+
+    if (added > 0) {
+        saveTasks();
+        Serial.printf("[TaskManager] %d eventos sincronizados como tareas.\n", added);
+    }
+    return added;
+}
