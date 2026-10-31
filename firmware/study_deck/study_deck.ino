@@ -438,7 +438,7 @@ void loop() {
                         audio.playClick();
                         currentView = VIEW_HOME;
                         refreshCurrentView();
-                    } else if (add) {
+                    } else if (add || (flashcards.getTotalCards() == 0 && touchY >= 165 && touchY <= 225)) {
                         audio.playClick();
                         currentView = VIEW_KEYBOARD_CARD_Q;
                         keyboard.reset("Pregunta de la ficha:", false, "");

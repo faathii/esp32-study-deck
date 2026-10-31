@@ -4,12 +4,19 @@ void CalendarManager::begin() {
     _prefs.begin("study_cal", false);
     _gcal.begin();
 
-    loadDefaultEvents();
-    loadDeadlines();
+    // Purgar datos de ejemplo antiguos de versiones previas si existen en NVS
+    if (!_prefs.getBool("real_only_v2", false)) {
+        _prefs.clear();
+        _prefs.putBool("real_only_v2", true);
+        _deadlineCount = 0;
+        _eventCount = 0;
+    } else {
+        loadDeadlines();
+    }
 }
 
 void CalendarManager::loadDefaultEvents() {
-    _eventCount = 0;
+    _eventCount = 0; // Cero eventos por defecto. Solo datos reales.
 }
 
 bool CalendarManager::isGoogleCalendarConfigured() const {
@@ -46,12 +53,9 @@ bool CalendarManager::syncGoogleCalendar(bool force) {
 }
 
 void CalendarManager::loadDeadlines() {
-    _deadlineCount = _prefs.getInt("dl_count", -1);
+    _deadlineCount = _prefs.getInt("dl_count", 0);
     if (_deadlineCount <= 0 || _deadlineCount > MAX_DEADLINES) {
-        _deadlineCount = 2;
-        _deadlines[0] = { "Examen de Fisica", 15, 11, 2026, 10 };
-        _deadlines[1] = { "Entrega Proyecto Final", 28, 11, 2026, 23 };
-        saveDeadlines();
+        _deadlineCount = 0;
         return;
     }
 
@@ -63,7 +67,7 @@ void CalendarManager::loadDeadlines() {
         snprintf(kY, sizeof(kY), "y_%d", i);
         snprintf(kH, sizeof(kH), "h_%d", i);
 
-        _deadlines[i].title       = _prefs.getString(kT, "Examen");
+        _deadlines[i].title       = _prefs.getString(kT, "");
         _deadlines[i].targetDay   = _prefs.getInt(kD, 1);
         _deadlines[i].targetMonth = _prefs.getInt(kM, 1);
         _deadlines[i].targetYear  = _prefs.getInt(kY, 2026);

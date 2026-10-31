@@ -2,13 +2,22 @@
 
 void TaskManager::begin() {
     _prefs.begin("study_tasks", false);
+
+    // Purgar tareas de ejemplo de versiones previas en NVS
+    if (!_prefs.getBool("real_only_v2", false)) {
+        _prefs.clear();
+        _prefs.putBool("real_only_v2", true);
+        _taskCount = 0;
+        return;
+    }
+
     loadTasks();
 }
 
 void TaskManager::loadTasks() {
-    _taskCount = _prefs.getInt("count", -1);
+    _taskCount = _prefs.getInt("count", 0);
     if (_taskCount <= 0 || _taskCount > MAX_TASKS) {
-        resetToDefaults();
+        _taskCount = 0;
         return;
     }
 
@@ -16,7 +25,7 @@ void TaskManager::loadTasks() {
         char keyText[16], keyDone[16];
         snprintf(keyText, sizeof(keyText), "t_%d", i);
         snprintf(keyDone, sizeof(keyDone), "d_%d", i);
-        _tasks[i].text = _prefs.getString(keyText, "Tarea");
+        _tasks[i].text = _prefs.getString(keyText, "");
         _tasks[i].completed = _prefs.getBool(keyDone, false);
     }
 }
@@ -33,11 +42,7 @@ void TaskManager::saveTasks() {
 }
 
 void TaskManager::resetToDefaults() {
-    _taskCount = 4;
-    _tasks[0] = { "Repasar apuntes del tema 1", false };
-    _tasks[1] = { "Resolver 5 ejercicios practicos", false };
-    _tasks[2] = { "Hacer resumen esquematico", false };
-    _tasks[3] = { "Sesion de flashcards de repaso", false };
+    _taskCount = 0; // Cero tareas por defecto
     saveTasks();
 }
 

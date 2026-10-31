@@ -9,40 +9,27 @@ void FlashcardManager::begin() {
 
     _prefs.begin("study_cards", false);
 
-    // Intentar cargar primero desde MicroSD
-    loadFromSD();
-
-    // Si no hay SD o está vacía, cargar de NVS o por defecto
-    if (_totalCards == 0) {
+    // Purgar fichas de ejemplo de versiones previas en NVS
+    if (!_prefs.getBool("real_only_v2", false)) {
+        _prefs.clear();
+        _prefs.putBool("real_only_v2", true);
+        _totalCards = 0;
+    } else {
         loadCustomFromNVS();
     }
 
-    if (_totalCards == 0) {
-        loadDefaultCards();
+    // Si hay archivo de fichas en MicroSD, cargarlas
+    if (SD.exists("/flashcards.txt")) {
+        loadFromSD();
     }
 }
 
 void FlashcardManager::loadDefaultCards() {
-    _totalCards = 6;
-    _cards[0] = { "Ley de Ohm", "V = I * R\n(Voltaje = Intensidad x Resistencia)", "Fisica" };
-    _cards[1] = { "Energia Cinetica", "Ec = 1/2 * m * v^2\n(Medida en Julios [J])", "Fisica" };
-    _cards[2] = { "Tecnica Feynman", "1. Elige concepto\n2. Explicalo facil\n3. Detecta huecos\n4. Simplifica", "Metodo" };
-    _cards[3] = { "Regla 80/20 (Pareto)", "El 80% de los resultados\nproviene del 20% del esfuerzo clave.", "Productividad" };
-    _cards[4] = { "Curva del Olvido", "Ebbinghaus: Repasar a las\n24h, 3 dias y 7 dias fija la memoria.", "Memoria" };
-    _cards[5] = { "Ciclo de Krebs", "Ruta en la matriz mitocondrial\npara generar ATP y transportadores.", "Bioquimica" };
+    _totalCards = 0; // Cero fichas por defecto. Solo las que cree el usuario.
 }
 
 void FlashcardManager::loadFromSD() {
     if (!SD.exists("/flashcards.txt")) {
-        // Crear plantilla en MicroSD para facilitar al usuario agregar tarjetas en PC
-        File f = SD.open("/flashcards.txt", FILE_WRITE);
-        if (f) {
-            f.println("Ley de Ohm|V = I * R (Voltaje = Intensidad x R)|Fisica");
-            f.println("Energia Cinetica|Ec = 1/2 * m * v^2 [Julios]|Fisica");
-            f.println("Tecnica Feynman|1.Concepto 2.Explica 3.Corrige|Metodo");
-            f.close();
-            Serial.println("[Flashcards] Plantilla /flashcards.txt creada en MicroSD.");
-        }
         return;
     }
 

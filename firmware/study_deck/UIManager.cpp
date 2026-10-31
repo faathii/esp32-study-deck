@@ -398,31 +398,42 @@ void UIManager::drawTodoView(const TaskManager &taskMgr, const BatteryManager &b
     drawUnifiedStatusBar(battery, wifiConnected, false, true, 0, headStr);
 
     int count = taskMgr.getTaskCount();
-    for (int i = 0; i < count; i++) {
-        StudyTask task = taskMgr.getTask(i);
-        int cardY = 30 + i * 32;
+    if (count == 0) {
+        _tft.fillRoundRect(12, 45, 296, 130, 4, COLOR_CARD);
+        _tft.drawRoundRect(12, 45, 296, 130, 4, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawCentreString("No tienes tareas pendientes", 160, 80, 2);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+        _tft.drawCentreString("Pulsa [+ NUEVA TAREA] para anadir tareas reales", 160, 110, 1);
+        _tft.drawCentreString("o sincroniza Google Calendar para importarlas.", 160, 125, 1);
+    } else {
+        int maxShow = count > 5 ? 5 : count;
+        for (int i = 0; i < maxShow; i++) {
+            StudyTask task = taskMgr.getTask(i);
+            int cardY = 30 + i * 32;
 
-        _tft.fillRoundRect(12, cardY, 296, 28, 4, COLOR_CARD);
-        _tft.drawRoundRect(12, cardY, 296, 28, 4, COLOR_BORDER);
+            _tft.fillRoundRect(12, cardY, 296, 28, 4, COLOR_CARD);
+            _tft.drawRoundRect(12, cardY, 296, 28, 4, COLOR_BORDER);
 
-        _tft.fillRoundRect(18, cardY + 4, 20, 20, 3, task.completed ? COLOR_TEXT_PRIMARY : COLOR_CARD);
-        _tft.drawRoundRect(18, cardY + 4, 20, 20, 3, COLOR_BORDER);
-        if (task.completed) {
-            _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
-            _tft.drawCentreString("V", 28, cardY + 6, 2);
+            _tft.fillRoundRect(18, cardY + 4, 20, 20, 3, task.completed ? COLOR_TEXT_PRIMARY : COLOR_CARD);
+            _tft.drawRoundRect(18, cardY + 4, 20, 20, 3, COLOR_BORDER);
+            if (task.completed) {
+                _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
+                _tft.drawCentreString("V", 28, cardY + 6, 2);
+            }
+
+            String txt = task.text;
+            if (txt.length() > 24) txt = txt.substring(0, 22) + "...";
+            _tft.setTextColor(task.completed ? COLOR_TEXT_MUTED : COLOR_TEXT_PRIMARY, COLOR_CARD);
+            _tft.drawString(txt, 44, cardY + 6, 2);
+
+            if (task.completed) {
+                _tft.drawFastHLine(44, cardY + 14, txt.length() * 7, COLOR_TEXT_MUTED);
+            }
+
+            _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
+            _tft.drawCentreString("x", 294, cardY + 6, 2);
         }
-
-        String txt = task.text;
-        if (txt.length() > 24) txt = txt.substring(0, 22) + "...";
-        _tft.setTextColor(task.completed ? COLOR_TEXT_MUTED : COLOR_TEXT_PRIMARY, COLOR_CARD);
-        _tft.drawString(txt, 44, cardY + 6, 2);
-
-        if (task.completed) {
-            _tft.drawFastHLine(44, cardY + 14, txt.length() * 7, COLOR_TEXT_MUTED);
-        }
-
-        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-        _tft.drawCentreString("x", 294, cardY + 6, 2);
     }
 
     _tft.fillRoundRect(12, 194, 142, 34, 5, COLOR_TEXT_PRIMARY);
@@ -479,6 +490,25 @@ int UIManager::handleTodoTouch(int x, int y, bool *outAdd, bool *outClear, int *
 
 void UIManager::drawFlashcardsView(const FlashcardManager &flashcards, const BatteryManager &battery, bool wifiConnected) {
     _tft.fillScreen(COLOR_BG);
+
+    if (flashcards.getTotalCards() == 0) {
+        drawUnifiedStatusBar(battery, wifiConnected, false, true, 0, "FICHAS (0/0)");
+
+        _tft.fillRoundRect(15, 30, 290, 126, 6, COLOR_CARD);
+        _tft.drawRoundRect(15, 30, 290, 126, 6, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawCentreString("No tienes fichas creadas", 160, 65, 2);
+        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+        _tft.drawCentreString("Pulsa [+ CREAR FICHA] para anadir tus apuntes reales", 160, 95, 1);
+        _tft.drawCentreString("o copia un archivo /flashcards.txt a tu MicroSD.", 160, 110, 1);
+
+        _tft.fillRoundRect(12, 168, 296, 48, 6, COLOR_CARD);
+        _tft.drawRoundRect(12, 168, 296, 48, 6, COLOR_BORDER);
+        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+        _tft.drawCentreString("+ CREAR FICHA", 160, 184, 2);
+        return;
+    }
+
     Flashcard card = flashcards.getCurrentCard();
 
     char headStr[48];
