@@ -79,11 +79,11 @@ public:
     void drawFlashcardsView(const FlashcardManager &flashcards, const BatteryManager &battery, bool wifiConnected);
     bool handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEasy, bool *outHard, bool *outAdd, bool *outBack);
 
-    // --- 5. APLICACIÓN AGENDA & RELOJ & EXÁMENES ---
+    // --- 5. APLICACIÓN AGENDA & GOOGLE CALENDAR & EXÁMENES ---
     void drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
                         const BatteryManager &battery, const WeatherManager &weather);
     void updateAgendaClock(CalendarManager &calendar, const WeatherManager &weather);
-    bool handleAgendaTouch(int x, int y, bool *outAddExam, bool *outNightMode, bool *outBack);
+    bool handleAgendaTouch(int x, int y, bool *outAddExam, bool *outSyncGCal, bool *outBack);
 
     // --- 6. APLICACIÓN DEDICADA: ESTACIÓN DE CLIMA (OPEN-METEO) ---
     void drawWeatherView(const WeatherManager &weather, const BatteryManager &battery, bool wifiConnected);

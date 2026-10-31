@@ -170,6 +170,7 @@ void loop() {
     led.update();
     battery.update();
     weather.update(wifi.isConnected());
+    calendar.update(wifi.isConnected());
 
     // 2. Animación de Respiración Box Breathing (4-4-4-4)
     if (currentView == VIEW_BREATHING) {
@@ -212,6 +213,7 @@ void loop() {
             connectionSuccess = true;
             configTime(0, 0, "pool.ntp.org", "time.google.com");
             weather.update(true); // Forzar descarga inmediata de clima
+            calendar.syncGoogleCalendar(true); // Forzar sincronización de Google Calendar
             currentView = VIEW_WIFI_RESULT;
             ui.drawWiFiResult(true, wifi.getLocalIP());
             resultStartTime = millis();
@@ -488,10 +490,10 @@ void loop() {
                     refreshCurrentView();
                 }
             }
-            // --- VISTA 4: APLICACIÓN AGENDA & EXÁMENES ---
+            // --- VISTA 4: APLICACIÓN AGENDA & GOOGLE CALENDAR & EXÁMENES ---
             else if (currentView == VIEW_AGENDA) {
-                bool addExam = false, nightMode = false, back = false;
-                if (ui.handleAgendaTouch(touchX, touchY, &addExam, &nightMode, &back)) {
+                bool addExam = false, syncGCal = false, back = false;
+                if (ui.handleAgendaTouch(touchX, touchY, &addExam, &syncGCal, &back)) {
                     if (back) {
                         audio.playClick();
                         currentView = VIEW_HOME;
@@ -501,11 +503,10 @@ void loop() {
                         currentView = VIEW_KEYBOARD_EXAM;
                         keyboard.reset("Nombre del examen/hito:", false, "");
                         keyboard.drawFull();
-                    } else if (nightMode) {
+                    } else if (syncGCal) {
                         audio.playClick();
-                        currentView = VIEW_NIGHT_CLOCK;
-                        analogWrite(PIN_BACKLIGHT, 25);
-                        ui.drawNightClockView(battery, weather);
+                        calendar.syncGoogleCalendar(true);
+                        refreshCurrentView();
                     }
                 }
             } 

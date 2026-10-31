@@ -2,19 +2,55 @@
 
 void CalendarManager::begin() {
     _prefs.begin("study_cal", false);
+    _gcal.begin();
 
-    // Agenda académica por defecto
-    _events[0] = { "Clase de Matematicas", "Aula 204", "09:00 - 11:00", false };
-    _events[1] = { "Sesion de Estudio Pomo", "Biblioteca", "16:00 - 18:30", true };
-    _events[2] = { "Entrega de Tarea", "Campus Virtual", "20:00", false };
-
+    loadDefaultEvents();
     loadDeadlines();
+}
+
+void CalendarManager::loadDefaultEvents() {
+    _eventCount = 3;
+    _events[0] = { "Clase de Matematicas", "Aula 204", "09:00 - 11:00", 9, 0, 11, 0, false };
+    _events[1] = { "Sesion de Estudio Pomo", "Biblioteca", "16:00 - 18:30", 16, 0, 18, 30, true };
+    _events[2] = { "Entrega de Proyecto", "Campus Virtual", "20:00 - 21:00", 20, 0, 21, 0, false };
+}
+
+bool CalendarManager::isGoogleCalendarConfigured() const {
+    return _gcal.isConfigured(String(SECRET_GOOGLE_CALENDAR_URL));
+}
+
+bool CalendarManager::syncGoogleCalendar(bool force) {
+    if (!isGoogleCalendarConfigured()) {
+        return false;
+    }
+
+    if (!force && _lastAutoSync > 0 && (millis() - _lastAutoSync < 900000)) { // 15 minutos
+        return true;
+    }
+
+    int count = 0;
+    CalendarEvent tempEvents[MAX_EVENTS];
+    bool ok = _gcal.fetchEvents(String(SECRET_GOOGLE_CALENDAR_URL), tempEvents, MAX_EVENTS, count);
+
+    if (ok && count > 0) {
+        _eventCount = count;
+        for (int i = 0; i < count; i++) {
+            _events[i] = tempEvents[i];
+        }
+        _lastAutoSync = millis();
+        return true;
+    } else if (ok && count == 0) {
+        _eventCount = 0; // Sin eventos hoy
+        _lastAutoSync = millis();
+        return true;
+    }
+
+    return false;
 }
 
 void CalendarManager::loadDeadlines() {
     _deadlineCount = _prefs.getInt("dl_count", -1);
     if (_deadlineCount <= 0 || _deadlineCount > MAX_DEADLINES) {
-        // Hitos iniciales
         _deadlineCount = 2;
         _deadlines[0] = { "Examen de Fisica", 15, 11, 2026, 10 };
         _deadlines[1] = { "Entrega Proyecto Final", 28, 11, 2026, 23 };
@@ -56,15 +92,24 @@ void CalendarManager::saveDeadlines() {
     }
 }
 
-void CalendarManager::update() {
+void CalendarManager::update(bool wifiConnected) {
     time_t now = time(nullptr);
     struct tm *t = localtime(&now);
 
     if (t->tm_year > 120) {
-        int currentHour = t->tm_hour;
-        _events[0].isOngoing = (currentHour >= 9 && currentHour < 11);
-        _events[1].isOngoing = (currentHour >= 16 && currentHour < 18);
-        _events[2].isOngoing = (currentHour >= 19 && currentHour < 20);
+        int nowMins = t->tm_hour * 60 + t->tm_min;
+        for (int i = 0; i < _eventCount; i++) {
+            int s = _events[i].startHour * 60 + _events[i].startMin;
+            int e = _events[i].endHour * 60 + _events[i].endMin;
+            if (e < s) e += 1440;
+            _events[i].isOngoing = (nowMins >= s && nowMins <= e);
+        }
+    }
+
+    if (wifiConnected && isGoogleCalendarConfigured()) {
+        if (_lastAutoSync == 0 || (millis() - _lastAutoSync >= 900000)) { // Auto-sync cada 15 min
+            syncGoogleCalendar(false);
+        }
     }
 }
 
@@ -72,7 +117,7 @@ CalendarEvent CalendarManager::getEvent(int index) const {
     if (index >= 0 && index < _eventCount) {
         return _events[index];
     }
-    return CalendarEvent{ "", "", "", false };
+    return CalendarEvent{ "", "", "", 0, 0, 0, 0, false };
 }
 
 AcademicDeadline CalendarManager::getDeadline(int index) const {
@@ -93,7 +138,6 @@ String CalendarManager::getNextDeadlineCountdown(String &outTitle) {
     struct tm *t = localtime(&now);
 
     if (t->tm_year <= 120) {
-        // Reloj aún sin sincronizar por NTP
         return "Conecta WiFi";
     }
 
