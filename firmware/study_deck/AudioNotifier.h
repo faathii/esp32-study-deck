@@ -61,6 +61,18 @@ public:
         tone(PIN_BUZZER, 2200, 40);
     }
 
+    // Alarma de 3 segundos para inicio y fin de franjas de estudio
+    void playStudyAlarm3s() {
+        if (_muted) return;
+        for (int i = 0; i < 6; i++) {
+            tone(PIN_BUZZER, 2093, 220); // Do6
+            delay(250);
+            tone(PIN_BUZZER, 2637, 220); // Mi6
+            delay(250);
+        }
+        noTone(PIN_BUZZER);
+    }
+
 private:
     bool _muted = false;
 };

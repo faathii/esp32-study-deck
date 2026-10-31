@@ -6,35 +6,28 @@
 #include "PomodoroEngine.h"
 #include "HardwareConfig.h"
 #include "WiFiConfig.h"
-#include "TaskManager.h"
-#include "FlashcardManager.h"
 #include "BatteryManager.h"
 #include "CalendarManager.h"
 #include "StorageManager.h"
 #include "WeatherManager.h"
 
 enum AppView {
-    VIEW_HOME = 0,
-    VIEW_POMODORO,
-    VIEW_TODO,
-    VIEW_FLASH,
-    VIEW_AGENDA,
-    VIEW_SETTINGS,
-    VIEW_INFO,
-    VIEW_NIGHT_CLOCK,
-    VIEW_WEATHER,
-    VIEW_BREATHING,
-    VIEW_RGB_LAMP,
-    VIEW_BATTERY,
-    VIEW_STATS,
-    VIEW_KEYBOARD_TASK,
-    VIEW_KEYBOARD_CARD_Q,
-    VIEW_KEYBOARD_CARD_A,
-    VIEW_KEYBOARD_EXAM,
-    VIEW_WIFI_SCAN,
-    VIEW_WIFI_KEYBOARD,
-    VIEW_WIFI_CONNECTING,
-    VIEW_WIFI_RESULT
+    VIEW_WEATHER = 0,     // Pantalla inicial predefinida (Standby con Clima y Reloj)
+    VIEW_HOME,            // Menú lanzador de aplicaciones
+    VIEW_POMODORO,        // Pomodoro con información de estudio del día
+    VIEW_AGENDA,          // Agenda y calendario académico UNED Ávila
+    VIEW_SETTINGS,        // Ajustes del sistema (Brillo, audio, reposo)
+    VIEW_INFO,            // Información de hardware y especificaciones
+    VIEW_NIGHT_CLOCK,     // Reloj nocturno minimalista
+    VIEW_BREATHING,       // Respiración consciente Box Breathing
+    VIEW_RGB_LAMP,        // Lámpara de escritorio RGB
+    VIEW_BATTERY,         // Monitor de telemetría de batería 5000 mAh
+    VIEW_STATS,           // Estadísticas de estudio en MicroSD
+    VIEW_KEYBOARD_EXAM,   // Teclado virtual para añadir hito/examen
+    VIEW_WIFI_SCAN,       // Escaneo de redes Wi-Fi
+    VIEW_WIFI_KEYBOARD,   // Teclado para contraseña Wi-Fi
+    VIEW_WIFI_CONNECTING, // Pantalla de conexión Wi-Fi
+    VIEW_WIFI_RESULT      // Resultado de conexión Wi-Fi
 };
 
 enum UIButtonAction {
@@ -59,64 +52,64 @@ public:
     void drawUnifiedStatusBar(const BatteryManager &battery, bool wifiConnected, bool audioMuted, 
                              bool autoBrightness, int streakCount, const char *appTitle = nullptr);
 
-    // --- 1. PANTALLA DE INICIO (LAUNCHER CON PESTAÑAS: ESTUDIO / UTILIDADES) ---
-    void drawHomeScreen(const PomodoroEngine &engine, const TaskManager &tasks, 
-                        const BatteryManager &battery, const WeatherManager &weather,
-                        bool wifiConnected, bool audioMuted, bool autoBrightness, int homeTab = 0);
+    // --- ICONOS VECTORIALES A TODO COLOR ---
+    void drawAppColorIcon(int cx, int cy, int appType);
+
+    // --- 1. PANTALLA INICIAL PREDEFINIDA: ESTACIÓN CLIMA & RELOJ DESK (STANDBY) ---
+    void drawWeatherView(const WeatherManager &weather, CalendarManager &calendar, 
+                         const BatteryManager &battery, bool wifiConnected);
+    void updateWeatherViewClock(const WeatherManager &weather, CalendarManager &calendar);
+    bool handleWeatherTouch(int x, int y, bool *outOpenMenu);
+
+    // --- 2. MENÚ LANZADOR DE APLICACIONES ---
+    void drawHomeScreen(const PomodoroEngine &engine, const BatteryManager &battery, 
+                        const WeatherManager &weather, bool wifiConnected, bool audioMuted, 
+                        bool autoBrightness, int homeTab = 0);
     int handleHomeTouch(int x, int y, int &homeTab);
 
-    // --- 2. APLICACIÓN POMODORO ---
-    void drawPomodoroView(const PomodoroEngine &engine, const BatteryManager &battery, 
-                          bool wifiConnected, bool audioMuted, bool autoBrightness);
-    void updatePomodoroTimer(const PomodoroEngine &engine, const BatteryManager &battery, bool wifiConnected);
+    // --- 3. APLICACIÓN POMODORO VINCULADA AL CALENDARIO ---
+    void drawPomodoroView(const PomodoroEngine &engine, const CalendarManager &calendar, 
+                          const BatteryManager &battery, bool wifiConnected, bool audioMuted, 
+                          bool autoBrightness);
+    void updatePomodoroTimer(const PomodoroEngine &engine, const CalendarManager &calendar, 
+                             const BatteryManager &battery, bool wifiConnected);
     UIButtonAction handlePomodoroTouch(int x, int y);
 
-    // --- 3. APLICACIÓN TAREAS TO-DO ---
-    void drawTodoView(const TaskManager &taskMgr, const BatteryManager &battery, bool wifiConnected);
-    int handleTodoTouch(int x, int y, bool *outAdd, bool *outClear, int *outDelete, bool *outBack);
-
-    // --- 4. APLICACIÓN FLASHCARDS ---
-    void drawFlashcardsView(const FlashcardManager &flashcards, const BatteryManager &battery, bool wifiConnected);
-    bool handleFlashcardTouch(int x, int y, bool *outFlipped, bool *outEasy, bool *outHard, bool *outAdd, bool *outBack);
-
-    // --- 5. APLICACIÓN AGENDA & GOOGLE CALENDAR & EXÁMENES ---
+    // --- 4. APLICACIÓN AGENDA ERGONÓMICA PARA PANTALLA 2.4" ---
     void drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
                         const BatteryManager &battery, const WeatherManager &weather);
     void updateAgendaClock(CalendarManager &calendar, const WeatherManager &weather);
     bool handleAgendaTouch(int x, int y, CalendarManager &calendar, bool *outAddExam, bool *outSyncGCal, bool *outBack);
 
-    // --- 6. APLICACIÓN DEDICADA: ESTACIÓN DE CLIMA (OPEN-METEO) ---
-    void drawWeatherView(const WeatherManager &weather, const BatteryManager &battery, bool wifiConnected);
-    bool handleWeatherTouch(int x, int y, bool *outRefresh, bool *outBack);
-
-    // --- 7. APLICACIÓN DEDICADA: RELOJ NOCTURNO (NIGHT DESK CLOCK) ---
+    // --- 5. APLICACIÓN DEDICADA: RELOJ NOCTURNO (NIGHT DESK CLOCK) ---
     void drawNightClockView(const BatteryManager &battery, const WeatherManager &weather);
     void updateNightClock(const BatteryManager &battery, const WeatherManager &weather);
     bool handleNightClockTouch(int x, int y);
 
-    // --- 8. APLICACIÓN DEDICADA: RESPIRACIÓN CONSCIENTE (BOX BREATHING) ---
+    // --- 6. APLICACIÓN DEDICADA: RESPIRACIÓN CONSCIENTE (BOX BREATHING) ---
     void drawBreathingView(int phase, int secondsLeft, int cycle, const BatteryManager &battery);
     bool handleBreathingTouch(int x, int y);
 
-    // --- 9. APLICACIÓN DEDICADA: LÁMPARA RGB DE ESCRITORIO ---
+    // --- 7. APLICACIÓN DEDICADA: LÁMPARA RGB DE ESCRITORIO ---
     void drawRgbLampView(int currentMode, const BatteryManager &battery);
     int handleRgbLampTouch(int x, int y, bool *outBack);
 
-    // --- 10. APLICACIÓN DEDICADA: TELEMETRÍA BATERÍA 5000 mAh ---
+    // --- 8. APLICACIÓN DEDICADA: TELEMETRÍA BATERÍA 5000 mAh ---
     void drawBatteryView(const BatteryManager &battery, bool wifiConnected);
     bool handleBatteryTouch(int x, int y);
 
-    // --- 11. APLICACIÓN DEDICADA: ESTADÍSTICAS & HISTORIAL MICROSD ---
-    void drawStatsView(StorageManager &storage, const PomodoroEngine &pomodoro, const BatteryManager &battery, bool wifiConnected);
+    // --- 9. APLICACIÓN DEDICADA: ESTADÍSTICAS & HISTORIAL MICROSD ---
+    void drawStatsView(StorageManager &storage, const PomodoroEngine &pomodoro, 
+                       const BatteryManager &battery, bool wifiConnected);
     bool handleStatsTouch(int x, int y);
 
-    // --- 12. APLICACIÓN AJUSTES DEL SISTEMA ---
+    // --- 10. APLICACIÓN AJUSTES DEL SISTEMA ---
     void drawSettingsView(const WiFiConfig &wifi, const BatteryManager &battery, 
                           int brightness, bool autoBrightness, bool soundMuted, int timeoutMinutes);
     int handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outBriDown, bool *outBriUp, 
                            bool *outToggleMute, bool *outTimeoutToggle, bool *outNightClock, bool *outOpenWifi, bool *outBack);
 
-    // --- 13. APLICACIÓN INFO DEL SISTEMA & HARDWARE ---
+    // --- 11. APLICACIÓN INFO DEL SISTEMA & HARDWARE ---
     void drawInfoView(const BatteryManager &battery, StorageManager &storage, 
                       const PomodoroEngine &pomodoro, bool wifiConnected);
     bool handleInfoTouch(int x, int y);
@@ -136,8 +129,9 @@ private:
     uint16_t _lastFocusMin = 0xFF;
     int _lastBatteryPct = -1;
     bool _lastWifiStatus = false;
+    int _selectedMonthDay = 0;
 
-    void drawAppCard(int x, int y, int w, int h, uint16_t bgColor, const char *icon, const char *title, const char *subtitle);
+    void drawAppCard(int x, int y, int w, int h, uint16_t bgColor, int appType, const char *title, const char *subtitle);
     void drawModeButtons(const PomodoroEngine &engine);
     void drawCountdown(const PomodoroEngine &engine);
     void drawProgressBar(const PomodoroEngine &engine);

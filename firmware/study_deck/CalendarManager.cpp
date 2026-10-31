@@ -161,7 +161,7 @@ AcademicDeadline CalendarManager::getDeadline(int index) const {
     return AcademicDeadline{ "", 0, 0, 0, 0 };
 }
 
-String CalendarManager::getNextDeadlineCountdown(String &outTitle) {
+String CalendarManager::getNextDeadlineCountdown(String &outTitle) const {
     if (_deadlineCount == 0) {
         outTitle = "Sin examenes programados";
         return "--";
@@ -445,3 +445,72 @@ String CalendarManager::getEventSummaryForDate(int day, int month, int year) con
 
     return "";
 }
+
+bool CalendarManager::getTodayMainSession(CalendarEvent &outSession) const {
+    CalendarEvent list[4];
+    int count = getTodayEvents(list, 4);
+    if (count > 0) {
+        outSession = list[0];
+        for (int i = 0; i < count; i++) {
+            if (list[i].isOngoing) {
+                outSession = list[i];
+                return true;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+bool CalendarManager::isStudySessionOngoing(CalendarEvent *outSession) const {
+    CalendarEvent list[4];
+    int count = getTodayEvents(list, 4);
+    for (int i = 0; i < count; i++) {
+        if (list[i].isOngoing) {
+            if (outSession) *outSession = list[i];
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CalendarManager::checkSessionStartTrigger(CalendarEvent &outSession) {
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+    if (t->tm_year <= 120) return false;
+
+    int nowMins = t->tm_hour * 60 + t->tm_min;
+    CalendarEvent list[4];
+    int count = getTodayEvents(list, 4);
+
+    for (int i = 0; i < count; i++) {
+        int sMins = list[i].startHour * 60 + list[i].startMin;
+        if (nowMins == sMins && _lastTriggeredStartMin != nowMins) {
+            _lastTriggeredStartMin = nowMins;
+            outSession = list[i];
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CalendarManager::checkSessionEndTrigger() {
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+    if (t->tm_year <= 120) return false;
+
+    int nowMins = t->tm_hour * 60 + t->tm_min;
+    CalendarEvent list[4];
+    int count = getTodayEvents(list, 4);
+
+    for (int i = 0; i < count; i++) {
+        int eMins = list[i].endHour * 60 + list[i].endMin;
+        if (eMins < list[i].startHour * 60 + list[i].startMin) eMins += 1440;
+        if (nowMins == eMins && _lastTriggeredEndMin != nowMins) {
+            _lastTriggeredEndMin = nowMins;
+            return true;
+        }
+    }
+    return false;
+}
+

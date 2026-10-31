@@ -62,9 +62,15 @@ public:
     // Hitos y cuenta regresiva de exámenes
     int getDeadlineCount() const { return _deadlineCount; }
     AcademicDeadline getDeadline(int index) const;
-    String getNextDeadlineCountdown(String &outTitle);
+    String getNextDeadlineCountdown(String &outTitle) const;
     bool addDeadline(const String &title, int day, int month, int year, int hour = 9);
     void deleteDeadline(int index);
+
+    // Automatización de estudio vinculada a reloj y calendario
+    bool getTodayMainSession(CalendarEvent &outSession) const;
+    bool isStudySessionOngoing(CalendarEvent *outSession = nullptr) const;
+    bool checkSessionStartTrigger(CalendarEvent &outSession);
+    bool checkSessionEndTrigger();
 
 private:
     GoogleCalendarClient _gcal;
@@ -81,6 +87,8 @@ private:
     Preferences _prefs;
 
     unsigned long _lastAutoSync = 0;
+    int _lastTriggeredStartMin = -1;
+    int _lastTriggeredEndMin = -1;
 
     void loadDefaultEvents();
     void loadDeadlines();
