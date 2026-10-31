@@ -52,57 +52,59 @@ void UIManager::drawUnifiedStatusBar(const BatteryManager &battery,
                                      const char *appTitle) {
   _tft.fillRect(0, 0, SCREEN_WIDTH, 22, COLOR_STATUS_BAR);
 
-    // 1. Izquierda: Título de Aplicación o Botón Atrás
-    _tft.setTextDatum(TL_DATUM);
-    if (appTitle != nullptr) {
-        _tft.fillRoundRect(4, 2, 50, 18, 3, COLOR_CARD);
-        _tft.drawRoundRect(4, 2, 50, 18, 3, COLOR_BORDER);
-        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-        _tft.drawCentreString("< ATRAS", 29, 5, 1);
+  // 1. Izquierda: Título de Aplicación o Botón Atrás
+  _tft.setTextDatum(TL_DATUM);
+  if (appTitle != nullptr) {
+    _tft.fillRoundRect(4, 2, 50, 18, 3, COLOR_CARD);
+    _tft.drawRoundRect(4, 2, 50, 18, 3, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+    _tft.drawCentreString("< ATRAS", 29, 5, 1);
 
-        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_STATUS_BAR);
-        _tft.drawString(appTitle, 60, 4, 2);
-    } else {
-        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_STATUS_BAR);
-        _tft.drawString("STUDY DECK", 8, 4, 2);
-    }
-
-    // 2. Derecha: Indicadores de Hardware y Estado con espaciado óptimo
-    int batPct = battery.getPercentage();
-    bool isCharging = battery.isCharging();
-    _tft.drawRoundRect(296, 6, 18, 10, 2, COLOR_TEXT_SECONDARY);
-    _tft.fillRect(314, 8, 2, 6, COLOR_TEXT_SECONDARY);
-    int fillW = map(constrain(batPct, 0, 100), 0, 100, 0, 14);
-    if (fillW > 0) {
-        uint16_t bCol = isCharging ? 0x07E0 : ((batPct > 20) ? COLOR_TEXT_PRIMARY : 0xF800);
-        _tft.fillRect(298, 8, fillW, 6, bCol);
-    }
-
-    // Porcentaje Batería
-    char batStr[8];
-    snprintf(batStr, sizeof(batStr), "%d%%", batPct);
-    _tft.setTextDatum(TR_DATUM);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_STATUS_BAR);
+    _tft.drawString(appTitle, 60, 4, 2);
+  } else {
     _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_STATUS_BAR);
-    _tft.drawString(batStr, 292, 5, 1);
+    _tft.drawString("STUDY DECK", 8, 4, 2);
+  }
 
-    // Wi-Fi
-    _tft.setTextDatum(TR_DATUM);
-    _tft.setTextColor(wifiConnected ? 0x07E0 : COLOR_TEXT_MUTED, COLOR_STATUS_BAR);
-    _tft.drawString(wifiConnected ? "WIFI" : "--", 262, 5, 1);
+  // 2. Derecha: Indicadores de Hardware y Estado con espaciado óptimo
+  int batPct = battery.getPercentage();
+  bool isCharging = battery.isCharging();
+  _tft.drawRoundRect(296, 6, 18, 10, 2, COLOR_TEXT_SECONDARY);
+  _tft.fillRect(314, 8, 2, 6, COLOR_TEXT_SECONDARY);
+  int fillW = map(constrain(batPct, 0, 100), 0, 100, 0, 14);
+  if (fillW > 0) {
+    uint16_t bCol =
+        isCharging ? 0x07E0 : ((batPct > 20) ? COLOR_TEXT_PRIMARY : 0xF800);
+    _tft.fillRect(298, 8, fillW, 6, bCol);
+  }
 
-    // Audio Mute
-    int flagX = 234;
-    if (audioMuted) {
-        _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_STATUS_BAR);
-        _tft.drawString("MUTE", flagX, 5, 1);
-        flagX -= 28;
-    }
+  // Porcentaje Batería
+  char batStr[8];
+  snprintf(batStr, sizeof(batStr), "%d%%", batPct);
+  _tft.setTextDatum(TR_DATUM);
+  _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_STATUS_BAR);
+  _tft.drawString(batStr, 292, 5, 1);
 
-    // Brillo automático
-    if (autoBrightness) {
-        _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_STATUS_BAR);
-        _tft.drawString("AUTO", flagX, 5, 1);
-    }
+  // Wi-Fi
+  _tft.setTextDatum(TR_DATUM);
+  _tft.setTextColor(wifiConnected ? 0x07E0 : COLOR_TEXT_MUTED,
+                    COLOR_STATUS_BAR);
+  _tft.drawString(wifiConnected ? "WIFI" : "--", 262, 5, 1);
+
+  // Audio Mute
+  int flagX = 234;
+  if (audioMuted) {
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_STATUS_BAR);
+    _tft.drawString("MUTE", flagX, 5, 1);
+    flagX -= 28;
+  }
+
+  // Brillo automático
+  if (autoBrightness) {
+    _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_STATUS_BAR);
+    _tft.drawString("AUTO", flagX, 5, 1);
+  }
 
   _tft.drawFastHLine(0, 22, SCREEN_WIDTH, COLOR_SEPARATOR);
   _tft.setTextDatum(TL_DATUM);
@@ -615,7 +617,7 @@ void UIManager::drawActionButtons(const PomodoroEngine &engine) {
   _tft.drawRoundRect(20, btnY, 180, btnH, 5, COLOR_TEXT_PRIMARY);
   _tft.setTextColor(running ? COLOR_TEXT_PRIMARY : COLOR_BG,
                     running ? COLOR_CARD : COLOR_TEXT_PRIMARY);
-  _tft.drawCentreString(running ? "PAUSAR" : "INICIAR", 110, btnY + 10,
+  _tft.drawCentreString(running ? "PAUSAR" : "INICIAR ESTUDIO", 110, btnY + 12,
                         4);
 
   // Botón Secundario: SALTAR
@@ -749,19 +751,20 @@ void UIManager::drawAgendaView(CalendarManager &calendar,
     _tft.fillRoundRect(12, 138, 296, 28, 4, COLOR_CARD);
     _tft.drawRoundRect(12, 138, 296, 28, 4, COLOR_BORDER);
 
-        bool foundTutoria = false;
-        for (int i = 0; i < evCount; i++) {
-            if (todayEvs[i].title.indexOf("Tutoria") != -1) {
-                _tft.setTextColor(0x07FF, COLOR_CARD);
-                _tft.drawString("TUTORIA HOY: " + todayEvs[i].timeRange, 20, 144, 2);
-                foundTutoria = true;
-                break;
-            }
-        }
-        if (!foundTutoria) {
-            _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-            _tft.drawString("Tutorias: Mar 20:00 (Sist. Dig) | Mie 18:15 (Prog)", 20, 147, 1);
-        }
+    bool foundTutoria = false;
+    for (int i = 0; i < evCount; i++) {
+      if (todayEvs[i].title.indexOf("Tutoria") != -1) {
+        _tft.setTextColor(0x07FF, COLOR_CARD);
+        _tft.drawString("TUTORIA HOY: " + todayEvs[i].timeRange, 20, 144, 2);
+        foundTutoria = true;
+        break;
+      }
+    }
+    if (!foundTutoria) {
+      _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+      _tft.drawString("Tutorias: Mar 20:00 (Sist. Dig) | Mie 18:15 (Prog)", 20,
+                      147, 1);
+    }
 
     // Tarjeta 3: Próximo Examen Oficial / Entrega con Cuenta Atrás (y:
     // 172..200, h: 28)
@@ -941,7 +944,8 @@ void UIManager::drawAgendaView(CalendarManager &calendar,
       bool hasExam = calendar.hasDeadlineOnDate(day, dispM, dispY);
 
       if (isToday) {
-        _tft.fillRoundRect(cellX + 8, cellY, 26, 14, 2, COLOR_TEXT_PRIMARY);
+        _tft.fillRoundRect(cellX + 7, cellY - 1, 28, 16, 4, COLOR_TEXT_PRIMARY);
+        _tft.drawRoundRect(cellX + 6, cellY - 2, 30, 18, 4, 0x07FF);
         _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
       } else {
         _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
@@ -1132,13 +1136,25 @@ void UIManager::drawBreathingView(int phase, int secondsLeft, int cycle,
   drawUnifiedStatusBar(battery, false, false, false, 0, "RELAX BOX");
 
   const char *phaseNames[4] = {"INHALA", "MANTEN", "EXHALA", "PAUSA"};
-  _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+  const uint16_t phaseColors[4] = {
+      0x2FEA, // Inhala: Verde menta suave
+      0x07FF, // Mantén: Cian enfoque
+      0x435F, // Exhala: Azul relajante
+      0x7BEF  // Pausa: Grafito suave
+  };
+  uint16_t currentPhaseColor = phaseColors[phase % 4];
+
+  _tft.setTextColor(currentPhaseColor, COLOR_BG);
   _tft.drawCentreString(phaseNames[phase % 4], 160, 34, 4);
 
   int cx = 160, cy = 115, sz = 44;
   _tft.drawRoundRect(cx - sz, cy - sz, sz * 2, sz * 2, 8, COLOR_BORDER);
   _tft.fillCircle(cx, cy, 26, COLOR_CARD);
-  _tft.drawCircle(cx, cy, 26, COLOR_TEXT_PRIMARY);
+  
+  // Anillo de 3 px de grosor con el color dinámico de la fase
+  _tft.drawCircle(cx, cy, 26, currentPhaseColor);
+  _tft.drawCircle(cx, cy, 27, currentPhaseColor);
+  _tft.drawCircle(cx, cy, 28, currentPhaseColor);
 
   char secBuf[8];
   snprintf(secBuf, sizeof(secBuf), "%d", secondsLeft);
@@ -1174,6 +1190,14 @@ void UIManager::drawRgbLampView(int currentMode,
 
   const char *modes[5] = {"0. APAGADO", "1. BLANCO CALIDO", "2. CIAN ENFOQUE",
                           "3. AZUL NOCTURNO", "4. EFECTO VELA"};
+  const uint16_t swatchColors[5] = {
+      0x2945, // 0. APAGADO (grafito oscuro)
+      0xFFF0, // 1. BLANCO CALIDO (marfil/ámbar suave)
+      0x07FF, // 2. CIAN ENFOQUE (cian brillante)
+      0x223F, // 3. AZUL NOCTURNO (azul profundo zafiro)
+      0xFD20  // 4. EFECTO VELA (ámbar fuego)
+  };
+
   _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_BG);
   _tft.drawCentreString("Selecciona el tono de iluminacion ambiental:", 160, 28,
                         2);
@@ -1186,9 +1210,14 @@ void UIManager::drawRgbLampView(int currentMode,
     _tft.drawRoundRect(16, y, 288, 30, 4,
                        active ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
 
-    _tft.fillCircle(36, y + 15, 6, active ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
-    if (active)
-      _tft.fillCircle(36, y + 15, 3, COLOR_BG);
+    // Muestra de color (swatch) con anillo exterior si está activo
+    _tft.fillCircle(36, y + 15, 7, swatchColors[i]);
+    if (active) {
+      _tft.drawCircle(36, y + 15, 9, COLOR_TEXT_PRIMARY);
+      _tft.drawCircle(36, y + 15, 10, COLOR_TEXT_PRIMARY);
+    } else {
+      _tft.drawCircle(36, y + 15, 8, COLOR_BORDER);
+    }
 
     _tft.setTextColor(active ? COLOR_TEXT_PRIMARY : COLOR_TEXT_SECONDARY,
                       active ? COLOR_CARD_HL : COLOR_CARD);
@@ -1232,9 +1261,11 @@ void UIManager::drawBatteryView(const BatteryManager &battery,
   drawAppColorIcon(50, 75, 7);
 
   char pctStr[16];
-  snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
+  snprintf(pctStr, sizeof(pctStr), "%d", pct);
   _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-  _tft.drawString(pctStr, 80, 52, 6);
+  int numW = _tft.drawString(pctStr, 80, 52, 6);
+  _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
+  _tft.drawString("%", 80 + numW + 3, 62, 4);
 
   _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
   _tft.drawString(charging ? "Cargando LiPo..." : "Descarga normal", 80, 96, 2);
@@ -1248,15 +1279,19 @@ void UIManager::drawBatteryView(const BatteryManager &battery,
   }
 
   char infoBuf[48];
-  snprintf(infoBuf, sizeof(infoBuf), "%.2f V  |  ~%.1f h restantes  |  18.5 Wh",
-           v, hrs);
+  if (v < 0.5f) {
+    snprintf(infoBuf, sizeof(infoBuf), "Alimentacion USB (5.0V)  |  18.5 Wh");
+  } else {
+    snprintf(infoBuf, sizeof(infoBuf), "%.2f V  |  ~%.1f h restantes  |  18.5 Wh",
+             v, hrs);
+  }
   _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
   _tft.drawCentreString(infoBuf, 160, 144, 2);
 
   _tft.fillRoundRect(16, 184, 288, 44, 5, COLOR_CARD);
   _tft.drawRoundRect(16, 184, 288, 44, 5, COLOR_BORDER);
   _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-  _tft.drawCentreString("Cargador TP4056 USB-C integrado con proteccion DW01",
+  _tft.drawCentreString("Cargador USB-C integrado | Proteccion LiPo DW01",
                         160, 200, 1);
 }
 
@@ -1282,8 +1317,9 @@ void UIManager::drawStatsView(StorageManager &storage,
 
   _tft.fillRoundRect(16, 32, 138, 70, 5, COLOR_CARD);
   _tft.drawRoundRect(16, 32, 138, 70, 5, COLOR_BORDER);
+  _tft.fillCircle(24, 42, 3, 0xFA08); // Acento rojo tomate Pomodoro
   _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-  _tft.drawString("SESIONES HOY", 24, 38, 1);
+  _tft.drawString("SESIONES HOY", 32, 38, 1);
   char sBuf[12];
   snprintf(sBuf, sizeof(sBuf), "%d", sessionsToday);
   _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
@@ -1291,8 +1327,9 @@ void UIManager::drawStatsView(StorageManager &storage,
 
   _tft.fillRoundRect(166, 32, 138, 70, 5, COLOR_CARD);
   _tft.drawRoundRect(166, 32, 138, 70, 5, COLOR_BORDER);
+  _tft.fillCircle(174, 42, 3, 0x07FF); // Acento cian enfoque
   _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-  _tft.drawString("TIEMPO TOTAL", 174, 38, 1);
+  _tft.drawString("TIEMPO TOTAL", 182, 38, 1);
   char mBuf[16];
   snprintf(mBuf, sizeof(mBuf), "%dh %02dm", focusMinToday / 60,
            focusMinToday % 60);
@@ -1311,8 +1348,7 @@ void UIManager::drawStatsView(StorageManager &storage,
   _tft.drawString(lBuf, 24, 134, 2);
 
   _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-  _tft.drawString("Ruta: /sessions.csv (Compatible con Excel/Python)", 24, 158,
-                  1);
+  _tft.drawString("Archivo: /sessions.csv (Excel / Python)", 24, 158, 1);
 
   _tft.fillRoundRect(16, 194, 288, 36, 5, COLOR_CARD);
   _tft.drawRoundRect(16, 194, 288, 36, 5, COLOR_BORDER);
@@ -1487,13 +1523,13 @@ void UIManager::drawInfoView(const BatteryManager &battery,
   y += 20;
 
   _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-  _tft.drawString("Hardware: Guition ESP32-2432S024C (2.4\" TFT)", 24, y, 2);
+  _tft.drawString("Hardware: Guition ESP32-2432S024C (2.4\")", 24, y, 2);
   y += 18;
   _tft.drawString("Tactil: CST820 Capacitivo I2C (320x240)", 24, y, 2);
   y += 18;
   _tft.drawString("Bateria: LiPo 5000 mAh 3.7V (18.5 Wh)", 24, y, 2);
   y += 18;
-  _tft.drawString("Zumbador: SC8002B con Alarma de Estudio 3s", 24, y, 2);
+  _tft.drawString("Audio: SC8002B (Alarma Estudio 3s)", 24, y, 2);
   y += 18;
   _tft.drawString("MicroSD: " + String(storage.isAvailable()
                                            ? "Detectada (FAT32)"
