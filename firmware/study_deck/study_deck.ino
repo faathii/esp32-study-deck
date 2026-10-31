@@ -148,7 +148,8 @@ void setup() {
   calendar.begin();
   weather.begin();
 
-  // 5. Inicializar Wi-Fi y Servidor de Captura / Control Remoto
+  // 5. Inicializar Wi-Fi, Sincronización NTP (Hora España CET/CEST) y Servidor Remoto
+  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
   wifi.begin();
   screenServer.begin(handleTouchPoint, navigateToView, refreshCurrentView);
 
