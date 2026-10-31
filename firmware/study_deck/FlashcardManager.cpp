@@ -9,23 +9,39 @@ void FlashcardManager::begin() {
 
     _prefs.begin("study_cards", false);
 
-    // Purgar fichas de ejemplo de versiones previas en NVS
-    if (!_prefs.getBool("real_only_v2", false)) {
+    // Purgar fichas antiguas de versiones previas en NVS
+    if (!_prefs.getBool("real_uned_v3", false)) {
         _prefs.clear();
-        _prefs.putBool("real_only_v2", true);
-        _totalCards = 0;
+        _prefs.putBool("real_uned_v3", true);
+        loadDefaultCards();
     } else {
         loadCustomFromNVS();
+        if (_totalCards == 0) {
+            loadDefaultCards();
+        }
     }
 
-    // Si hay archivo de fichas en MicroSD, cargarlas
+    // Si hay archivo de fichas en MicroSD, complementar con SD
     if (SD.exists("/flashcards.txt")) {
         loadFromSD();
     }
 }
 
 void FlashcardManager::loadDefaultCards() {
-    _totalCards = 0; // Cero fichas por defecto. Solo las que cree el usuario.
+    _cards[0] = { "Operador para acceder a miembros via puntero?", "El operador flecha -> (ej. p->campo)", "Prog C" };
+    _cards[1] = { "Diferencia entre *p y &var en C?", "*p obtiene el valor; &var obtiene la direccion", "Prog C" };
+    _cards[2] = { "Que es un TAD en lenguaje C?", "Tipo Abstracto: interfaz (.h) e implementacion privada (.c)", "Prog C" };
+    
+    _cards[3] = { "Para que sirve un mapa de Karnaugh?", "Simplificar algebra booleana agrupando 1s adyacentes", "Sist. Digitales" };
+    _cards[4] = { "Funcion de un Multiplexor 4 a 1?", "Selecciona 1 de 4 entradas segun 2 lineas de control", "Sist. Digitales" };
+    _cards[5] = { "Combinacional vs Secuencial?", "Combinacional: depende de entradas; Secuencial: tiene memoria (flip-flops)", "Sist. Digitales" };
+    
+    _cards[6] = { "Leyes de De Morgan en logica?", "!(P y Q) <=> (!P o !Q)  y  !(P o Q) <=> (!P y !Q)", "Logica Discreta" };
+    _cards[7] = { "Regla de inferencia Modus Ponens?", "De 'P -> Q' y 'P' se deduce necesariamente 'Q'", "Logica Discreta" };
+    _cards[8] = { "Negacion de universal !(Para todo x, P(x))?", "Existe x tal que !P(x)", "Logica Discreta" };
+    
+    _totalCards = 9;
+    saveCustomToNVS();
 }
 
 void FlashcardManager::loadFromSD() {

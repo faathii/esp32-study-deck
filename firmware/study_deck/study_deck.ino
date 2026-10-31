@@ -139,9 +139,10 @@ void setup() {
     // 4. Inicializar MicroSD, Estudio, Agenda y Clima
     storage.begin();
     pomodoro.begin();
-    taskMgr.begin();
-    flashcards.begin();
     calendar.begin();
+    taskMgr.begin();
+    taskMgr.syncFromCalendar(calendar.getEvents(), calendar.getEventCount());
+    flashcards.begin();
     weather.begin();
 
     // 5. Inicializar Wi-Fi

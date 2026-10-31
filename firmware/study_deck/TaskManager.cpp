@@ -3,11 +3,11 @@
 void TaskManager::begin() {
     _prefs.begin("study_tasks", false);
 
-    // Purgar tareas de ejemplo de versiones previas en NVS
-    if (!_prefs.getBool("real_only_v2", false)) {
+    // Purgar tareas residuales de versiones previas en NVS
+    if (!_prefs.getBool("real_uned_v3", false)) {
         _prefs.clear();
-        _prefs.putBool("real_only_v2", true);
-        _taskCount = 0;
+        _prefs.putBool("real_uned_v3", true);
+        resetToDefaults();
         return;
     }
 
@@ -17,7 +17,7 @@ void TaskManager::begin() {
 void TaskManager::loadTasks() {
     _taskCount = _prefs.getInt("count", 0);
     if (_taskCount <= 0 || _taskCount > MAX_TASKS) {
-        _taskCount = 0;
+        resetToDefaults();
         return;
     }
 
@@ -42,7 +42,10 @@ void TaskManager::saveTasks() {
 }
 
 void TaskManager::resetToDefaults() {
-    _taskCount = 0; // Cero tareas por defecto
+    _tasks[0] = { "[CAL] Estudio Prog: Sem 2", false };
+    _tasks[1] = { "[CAL] Practica 1 en C", false };
+    _tasks[2] = { "[CAL] Sist. Digitales Sem 2", false };
+    _taskCount = 3;
     saveTasks();
 }
 

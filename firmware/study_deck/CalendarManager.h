@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include <time.h>
 #include "GoogleCalendarClient.h"
+#include "AcademicCalendarData.h"
 
 #if __has_include("Secrets.h")
 #include "Secrets.h"
@@ -67,7 +68,7 @@ public:
 
 private:
     GoogleCalendarClient _gcal;
-    static const int MAX_EVENTS = 16;
+    static const int MAX_EVENTS = 32;
     int _eventCount = 0;
     CalendarEvent _events[MAX_EVENTS];
 
@@ -75,7 +76,7 @@ private:
     int _monthOffset = 0;
 
     int _deadlineCount = 0;
-    static const int MAX_DEADLINES = 6;
+    static const int MAX_DEADLINES = 10;
     AcademicDeadline _deadlines[MAX_DEADLINES];
     Preferences _prefs;
 

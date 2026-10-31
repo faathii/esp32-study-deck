@@ -25,6 +25,27 @@ int GoogleCalendarClient::getTimezoneOffsetHours() {
     return diff;
 }
 
+static String sanitizeText(const String &s) {
+    String out = "";
+    out.reserve(s.length());
+    for (size_t i = 0; i < s.length(); i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c >= 32 && c <= 126) {
+            out += (char)c;
+        } else if (c == 0xC3 && i + 1 < s.length()) { // Caracteres españoles UTF-8 comunes
+            unsigned char c2 = (unsigned char)s[++i];
+            if (c2 == 0xA1 || c2 == 0x81) out += 'a';
+            else if (c2 == 0xA9 || c2 == 0x89) out += 'e';
+            else if (c2 == 0xAD || c2 == 0x8D) out += 'i';
+            else if (c2 == 0xB3 || c2 == 0x93) out += 'o';
+            else if (c2 == 0xBA || c2 == 0x9A) out += 'u';
+            else if (c2 == 0xB1 || c2 == 0x91) out += 'n';
+        }
+    }
+    out.trim();
+    return out;
+}
+
 bool GoogleCalendarClient::fetchEvents(const String &url, GCalEvent *outEvents, int maxEvents, int &outCount) {
     outCount = 0;
     if (!isConfigured(url)) {
@@ -42,7 +63,7 @@ bool GoogleCalendarClient::fetchEvents(const String &url, GCalEvent *outEvents, 
     HTTPClient http;
     http.begin(client, url);
     http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    http.setTimeout(12000);
+    http.setTimeout(25000); // 25s de timeout para permitir el stream de 88KB
 
     int httpCode = http.GET();
     Serial.printf("[GoogleCalendar] Codigo HTTP: %d\n", httpCode);
@@ -56,8 +77,6 @@ bool GoogleCalendarClient::fetchEvents(const String &url, GCalEvent *outEvents, 
     WiFiClient *stream = http.getStreamPtr();
     int tzOffset = getTimezoneOffsetHours();
 
-    // Comprobar si la respuesta es iCal (ICS) o JSON de Apps Script
-    // Para no bloquear, leer los primeros caracteres
     parseIcsStream(stream, outEvents, maxEvents, outCount, tzOffset);
 
     http.end();
@@ -69,7 +88,7 @@ bool GoogleCalendarClient::fetchEvents(const String &url, GCalEvent *outEvents, 
         Serial.printf("[GoogleCalendar] Sincronizacion completada: %d eventos.\n", outCount);
         return true;
     } else {
-        _hasData = true; // Sincronizado, pero sin eventos hoy
+        _hasData = true;
         _lastSyncTime = millis();
         _statusMsg = "Sin eventos hoy en GCal";
         Serial.println("[GoogleCalendar] Sincronizado, no hay eventos hoy.");
@@ -84,7 +103,7 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
     if (t->tm_year > 120) {
         snprintf(todayStr, sizeof(todayStr), "%04d%02d%02d", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday);
     } else {
-        todayStr[0] = '\0'; // Reloj aún no sincronizado
+        todayStr[0] = '\0';
     }
 
     bool inEvent = false;
@@ -96,7 +115,7 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
 
     unsigned long startMs = millis();
 
-    while (stream->connected() && (stream->available() || (millis() - startMs < 6000))) {
+    while (stream->connected() && (stream->available() || (millis() - startMs < 25000))) {
         if (!stream->available()) {
             delay(10);
             continue;
@@ -131,14 +150,20 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
             } else if (line.startsWith("END:VEVENT")) {
                 inEvent = false;
 
-                // Si no hay título, nombrar "Evento"
                 if (summary.length() == 0) summary = "Evento Google";
+                summary = sanitizeText(summary);
+                location = sanitizeText(location);
 
                 int evYear = 0, evMonth = 0, evDay = 0;
                 if (dtstart.length() >= 8) {
                     evYear = dtstart.substring(0, 4).toInt();
                     evMonth = dtstart.substring(4, 6).toInt();
                     evDay = dtstart.substring(6, 8).toInt();
+                }
+
+                // Filtrar eventos antiguos previos al semestre 2026/2027
+                if (evYear > 0 && evYear < 2026) {
+                    continue;
                 }
 
                 long startDate = 0;
@@ -153,7 +178,6 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                 if (rrule.length() > 0) {
                     isRecurring = true;
 
-                    // Parsear UNTIL=YYYYMMDD...
                     int uIdx = rrule.indexOf("UNTIL=");
                     if (uIdx != -1) {
                         String uPart = rrule.substring(uIdx + 6);
@@ -164,7 +188,11 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         }
                     }
 
-                    // Parsear BYDAY=MO,TU,WE...
+                    // Ignorar eventos recurrentes viejos que caducaron antes de octubre 2026
+                    if (untilDate > 0 && untilDate < 20261001) {
+                        continue;
+                    }
+
                     int bIdx = rrule.indexOf("BYDAY=");
                     if (bIdx != -1) {
                         String daysPart = rrule.substring(bIdx + 6);
@@ -180,9 +208,8 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         if (daysPart.indexOf("SA") != -1) repeatDaysMask |= (1 << 6);
                     } else {
                         if (rrule.indexOf("FREQ=DAILY") != -1) {
-                            repeatDaysMask = 0x7F; // Todos los días
+                            repeatDaysMask = 0x7F;
                         } else if (evYear > 0) {
-                            // FREQ=WEEKLY en el mismo día que comenzó
                             struct tm sTm = {0};
                             sTm.tm_year = evYear - 1900;
                             sTm.tm_mon = evMonth - 1;
@@ -193,17 +220,15 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                     }
                 }
 
-                // Criterio de aceptación:
-                long todayNum = (todayStr[0] != '\0') ? atol(todayStr) : 0;
+                // Criterio de aceptación para el curso 2026/2027:
+                long todayNum = (todayStr[0] != '\0') ? atol(todayStr) : 20261031;
                 bool accept = false;
                 if (isRecurring) {
-                    // Aceptar evento recurrente si aún no ha expirado
-                    if (untilDate == 0 || todayNum == 0 || todayNum <= untilDate) {
+                    if (untilDate == 0 || todayNum <= untilDate) {
                         accept = true;
                     }
                 } else {
-                    // Evento puntual: aceptar si es de hoy o futuro
-                    if (todayNum == 0 || startDate >= todayNum) {
+                    if (startDate >= todayNum || startDate >= 20261001) {
                         accept = true;
                     }
                 }
@@ -237,7 +262,6 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         timeRange = String(rBuf);
                     }
 
-                    // Determinar si ocurre hoy
                     bool isToday = false;
                     if (t->tm_year > 120) {
                         int curWDay = t->tm_wday;
@@ -250,7 +274,6 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         }
                     }
 
-                    // Determinar si está en curso ahora
                     bool ongoing = false;
                     if (t->tm_year > 120 && isToday && tIdx != -1) {
                         int nowMins = t->tm_hour * 60 + t->tm_min;
@@ -266,8 +289,7 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         sH, sM, eH, eM, ongoing,
                         isRecurring, repeatDaysMask, startDate, untilDate
                     };
-                    Serial.printf("[GoogleCalendar] Evento capturado: '%s' | %s | Recurrente: %s\n", 
-                                  summary.c_str(), timeRange.c_str(), isRecurring ? "SI" : "NO");
+                    Serial.printf("[GoogleCalendar] Evento UNED: '%s' | %s\n", summary.c_str(), timeRange.c_str());
                     outCount++;
 
                     if (outCount >= maxEvents) {
@@ -286,4 +308,3 @@ String GoogleCalendarClient::getLastSyncString() const {
     if (diffSec < 3600) return String(diffSec / 60) + " min";
     return String(diffSec / 3600) + " h";
 }
-
