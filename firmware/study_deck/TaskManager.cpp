@@ -99,7 +99,19 @@ int TaskManager::syncFromCalendar(const CalendarEvent *events, int eventCount) {
     if (!events || eventCount <= 0) return 0;
     int added = 0;
 
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+    int cD = (t->tm_year > 120) ? t->tm_mday : 31;
+    int cM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
+    int cY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+    int cW = (t->tm_year > 120) ? t->tm_wday : 6;
+
     for (int i = 0; i < eventCount; i++) {
+        // Solo sincronizar a tareas los eventos que tocan HOY
+        if (!events[i].occursOnDate(cD, cM, cY, cW)) {
+            continue;
+        }
+
         String title = events[i].title;
         title.trim();
         if (title.length() == 0) continue;
@@ -126,7 +138,7 @@ int TaskManager::syncFromCalendar(const CalendarEvent *events, int eventCount) {
 
     if (added > 0) {
         saveTasks();
-        Serial.printf("[TaskManager] %d eventos sincronizados como tareas.\n", added);
+        Serial.printf("[TaskManager] %d eventos de hoy sincronizados como tareas.\n", added);
     }
     return added;
 }

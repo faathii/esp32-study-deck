@@ -67,7 +67,7 @@ public:
 
 private:
     GoogleCalendarClient _gcal;
-    static const int MAX_EVENTS = 10;
+    static const int MAX_EVENTS = 16;
     int _eventCount = 0;
     CalendarEvent _events[MAX_EVENTS];
 

@@ -9,16 +9,7 @@ void CalendarManager::begin() {
 }
 
 void CalendarManager::loadDefaultEvents() {
-    time_t now = time(nullptr);
-    struct tm *t = localtime(&now);
-    int cD = (t->tm_year > 120) ? t->tm_mday : 31;
-    int cM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
-    int cY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
-
-    _eventCount = 3;
-    _events[0] = { "Clase de Matematicas", "Aula 204", "09:00 - 11:00", cD, cM, cY, 9, 0, 11, 0, false };
-    _events[1] = { "Sesion de Estudio Pomo", "Biblioteca", "16:00 - 18:30", cD, cM, cY, 16, 0, 18, 30, true };
-    _events[2] = { "Entrega de Proyecto", "Campus Virtual", "20:00 - 21:00", cD, cM, cY, 20, 0, 21, 0, false };
+    _eventCount = 0;
 }
 
 bool CalendarManager::isGoogleCalendarConfigured() const {
@@ -202,25 +193,35 @@ int CalendarManager::getTodayEvents(CalendarEvent *outList, int maxOut) const {
     int cD = (t->tm_year > 120) ? t->tm_mday : 31;
     int cM = (t->tm_year > 120) ? (t->tm_mon + 1) : 10;
     int cY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+    int cW = (t->tm_year > 120) ? t->tm_wday : 6;
 
     int matched = 0;
     for (int i = 0; i < _eventCount && matched < maxOut; i++) {
-        if ((_events[i].day == cD && _events[i].month == cM && (_events[i].year == cY || _events[i].year == 0))
-            || (_events[i].day == 0)) {
-            outList[matched++] = _events[i];
-        }
-    }
-    if (matched == 0 && _eventCount > 0) {
-        for (int i = 0; i < _eventCount && matched < maxOut; i++) {
-            outList[matched++] = _events[i];
+        if (_events[i].occursOnDate(cD, cM, cY, cW)) {
+            outList[matched] = _events[i];
+            if (t->tm_year > 120) {
+                int nowMins = t->tm_hour * 60 + t->tm_min;
+                int startMins = _events[i].startHour * 60 + _events[i].startMin;
+                int endMins = _events[i].endHour * 60 + _events[i].endMin;
+                if (endMins < startMins) endMins += 1440;
+                outList[matched].isOngoing = (nowMins >= startMins && nowMins <= endMins);
+            }
+            matched++;
         }
     }
     return matched;
 }
 
 bool CalendarManager::hasEventOnDate(int day, int month, int year) const {
+    struct tm dTm = {0};
+    dTm.tm_year = year - 1900;
+    dTm.tm_mon = month - 1;
+    dTm.tm_mday = day;
+    mktime(&dTm);
+    int wday = dTm.tm_wday;
+
     for (int i = 0; i < _eventCount; i++) {
-        if (_events[i].day == day && _events[i].month == month && (_events[i].year == year || _events[i].year == 0)) {
+        if (_events[i].occursOnDate(day, month, year, wday)) {
             return true;
         }
     }
@@ -242,8 +243,16 @@ String CalendarManager::getEventSummaryForDate(int day, int month, int year) con
             return "[!] " + _deadlines[i].title;
         }
     }
+
+    struct tm dTm = {0};
+    dTm.tm_year = year - 1900;
+    dTm.tm_mon = month - 1;
+    dTm.tm_mday = day;
+    mktime(&dTm);
+    int wday = dTm.tm_wday;
+
     for (int i = 0; i < _eventCount; i++) {
-        if (_events[i].day == day && _events[i].month == month && (_events[i].year == year || _events[i].year == 0)) {
+        if (_events[i].occursOnDate(day, month, year, wday)) {
             if (_events[i].startHour > 0) {
                 return _events[i].timeRange.substring(0, 5) + " " + _events[i].title;
             }

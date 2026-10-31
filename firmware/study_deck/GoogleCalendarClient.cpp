@@ -92,6 +92,7 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
     String location = "";
     String dtstart = "";
     String dtend = "";
+    String rrule = "";
 
     unsigned long startMs = millis();
 
@@ -110,6 +111,7 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
             location = "";
             dtstart = "";
             dtend = "";
+            rrule = "";
         } else if (inEvent) {
             if (line.startsWith("SUMMARY:")) {
                 summary = line.substring(8);
@@ -124,6 +126,8 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
             } else if (line.startsWith("DTEND")) {
                 int c = line.indexOf(':');
                 if (c != -1) dtend = line.substring(c + 1);
+            } else if (line.startsWith("RRULE:")) {
+                rrule = line.substring(6);
             } else if (line.startsWith("END:VEVENT")) {
                 inEvent = false;
 
@@ -137,20 +141,71 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                     evDay = dtstart.substring(6, 8).toInt();
                 }
 
-                // Filtrado por fecha: aceptar eventos de hoy y próximos días de la semana/mes
+                long startDate = 0;
+                if (evYear > 0) {
+                    startDate = (long)evYear * 10000 + evMonth * 100 + evDay;
+                }
+
+                bool isRecurring = false;
+                uint8_t repeatDaysMask = 0;
+                long untilDate = 0;
+
+                if (rrule.length() > 0) {
+                    isRecurring = true;
+
+                    // Parsear UNTIL=YYYYMMDD...
+                    int uIdx = rrule.indexOf("UNTIL=");
+                    if (uIdx != -1) {
+                        String uPart = rrule.substring(uIdx + 6);
+                        if (uPart.length() >= 8) {
+                            untilDate = (long)uPart.substring(0, 4).toInt() * 10000 +
+                                        uPart.substring(4, 6).toInt() * 100 +
+                                        uPart.substring(6, 8).toInt();
+                        }
+                    }
+
+                    // Parsear BYDAY=MO,TU,WE...
+                    int bIdx = rrule.indexOf("BYDAY=");
+                    if (bIdx != -1) {
+                        String daysPart = rrule.substring(bIdx + 6);
+                        int semi = daysPart.indexOf(';');
+                        if (semi != -1) daysPart = daysPart.substring(0, semi);
+
+                        if (daysPart.indexOf("SU") != -1) repeatDaysMask |= (1 << 0);
+                        if (daysPart.indexOf("MO") != -1) repeatDaysMask |= (1 << 1);
+                        if (daysPart.indexOf("TU") != -1) repeatDaysMask |= (1 << 2);
+                        if (daysPart.indexOf("WE") != -1) repeatDaysMask |= (1 << 3);
+                        if (daysPart.indexOf("TH") != -1) repeatDaysMask |= (1 << 4);
+                        if (daysPart.indexOf("FR") != -1) repeatDaysMask |= (1 << 5);
+                        if (daysPart.indexOf("SA") != -1) repeatDaysMask |= (1 << 6);
+                    } else {
+                        if (rrule.indexOf("FREQ=DAILY") != -1) {
+                            repeatDaysMask = 0x7F; // Todos los días
+                        } else if (evYear > 0) {
+                            // FREQ=WEEKLY en el mismo día que comenzó
+                            struct tm sTm = {0};
+                            sTm.tm_year = evYear - 1900;
+                            sTm.tm_mon = evMonth - 1;
+                            sTm.tm_mday = evDay;
+                            mktime(&sTm);
+                            repeatDaysMask |= (1 << sTm.tm_wday);
+                        }
+                    }
+                }
+
+                // Criterio de aceptación:
+                long todayNum = (todayStr[0] != '\0') ? atol(todayStr) : 0;
                 bool accept = false;
-                bool isToday = false;
-                if (todayStr[0] != '\0' && dtstart.length() >= 8) {
-                    String dtDate = dtstart.substring(0, 8);
-                    if (dtDate >= String(todayStr)) {
+                if (isRecurring) {
+                    // Aceptar evento recurrente si aún no ha expirado
+                    if (untilDate == 0 || todayNum == 0 || todayNum <= untilDate) {
                         accept = true;
                     }
-                    if (dtDate == String(todayStr)) {
-                        isToday = true;
-                    }
                 } else {
-                    accept = true;
-                    isToday = true;
+                    // Evento puntual: aceptar si es de hoy o futuro
+                    if (todayNum == 0 || startDate >= todayNum) {
+                        accept = true;
+                    }
                 }
 
                 if (accept && outCount < maxEvents) {
@@ -182,6 +237,19 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         timeRange = String(rBuf);
                     }
 
+                    // Determinar si ocurre hoy
+                    bool isToday = false;
+                    if (t->tm_year > 120) {
+                        int curWDay = t->tm_wday;
+                        if (isRecurring) {
+                            if ((todayNum >= startDate) && (untilDate == 0 || todayNum <= untilDate)) {
+                                if ((repeatDaysMask & (1 << curWDay)) != 0) isToday = true;
+                            }
+                        } else {
+                            if (dtstart.startsWith(todayStr)) isToday = true;
+                        }
+                    }
+
                     // Determinar si está en curso ahora
                     bool ongoing = false;
                     if (t->tm_year > 120 && isToday && tIdx != -1) {
@@ -192,7 +260,14 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                         ongoing = (nowMins >= startMins && nowMins <= endMins);
                     }
 
-                    outEvents[outCount] = { summary, location, timeRange, evDay, evMonth, evYear, sH, sM, eH, eM, ongoing };
+                    outEvents[outCount] = { 
+                        summary, location, timeRange, 
+                        evDay, evMonth, evYear, 
+                        sH, sM, eH, eM, ongoing,
+                        isRecurring, repeatDaysMask, startDate, untilDate
+                    };
+                    Serial.printf("[GoogleCalendar] Evento capturado: '%s' | %s | Recurrente: %s\n", 
+                                  summary.c_str(), timeRange.c_str(), isRecurring ? "SI" : "NO");
                     outCount++;
 
                     if (outCount >= maxEvents) {
