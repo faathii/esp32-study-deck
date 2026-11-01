@@ -338,13 +338,42 @@ void handleTouchPoint(int touchX, int touchY) {
     analogWrite(PIN_BACKLIGHT, currentBrightness);
   }
 
-  // --- VISTA 0: PANTALLA PREDEFINIDA CLIMA & RELOJ (STANDBY) ---
-      if (currentView == VIEW_WEATHER) {
-        audio.playClick();
-        currentView = VIEW_HOME;
-        refreshCurrentView();
-        return;
-      }
+  // ========================================================================
+  // 0. NAVEGACIÓN DIRECTA: LEFT CYBER RAIL (x: 0..46, y: 0..240)
+  // ========================================================================
+  if (touchX >= 0 && touchX <= 46) {
+    audio.playClick();
+    if (touchY >= 0 && touchY < 48) {
+      currentView = VIEW_WEATHER; // Slot 0: DESK / STANDBY
+    } else if (touchY >= 48 && touchY < 96) {
+      currentView = VIEW_POMODORO; // Slot 1: FOCUS / POMODORO
+    } else if (touchY >= 96 && touchY < 144) {
+      currentView = VIEW_AGENDA; // Slot 2: CAL / AGENDA UNED
+    } else if (touchY >= 144 && touchY < 192) {
+      currentView = VIEW_RGB_LAMP; // Slot 3: LAMP / AURA
+    } else if (touchY >= 192 && touchY < 240) {
+      currentView = VIEW_SETTINGS; // Slot 4: SYS / CONTROL CENTER
+    }
+    refreshCurrentView();
+    return;
+  }
+
+  // ========================================================================
+  // 1. ÁREA DE TRABAJO (x: 47..320, y: 0..240)
+  // ========================================================================
+
+  // --- VISTA 0: PANTALLA PREDEFINIDA CLIMA & RADAR DESK (STANDBY) ---
+  if (currentView == VIEW_WEATHER) {
+    audio.playClick();
+    // Si toca la tarjeta inferior de radar académico, abre Pomodoro
+    if (touchY >= 122) {
+      currentView = VIEW_POMODORO;
+    } else {
+      currentView = VIEW_AGENDA;
+    }
+    refreshCurrentView();
+    return;
+  }
 
       // --- VISTA 1: MENÚ LANZADOR DE APLICACIONES ---
       else if (currentView == VIEW_HOME) {
@@ -460,26 +489,17 @@ void handleTouchPoint(int touchX, int touchY) {
 
       // --- VISTA 3: APLICACIÓN AGENDA & GOOGLE CALENDAR ---
       else if (currentView == VIEW_AGENDA) {
+        if (calendar.getViewMode() == CAL_VIEW_DAY && touchY >= 186) {
+          audio.playClick();
+          currentView = VIEW_POMODORO;
+          refreshCurrentView();
+          return;
+        }
         bool addExam = false, syncGCal = false, back = false;
         if (ui.handleAgendaTouch(touchX, touchY, calendar, &addExam, &syncGCal,
                                  &back)) {
-          if (back) {
-            audio.playClick();
-            currentView = VIEW_HOME;
-            refreshCurrentView();
-          } else if (addExam) {
-            audio.playClick();
-            currentView = VIEW_KEYBOARD_EXAM;
-            keyboard.reset("Nombre del examen/hito:", false, "");
-            keyboard.drawFull();
-          } else if (syncGCal) {
-            audio.playClick();
-            calendar.syncGoogleCalendar(true);
-            refreshCurrentView();
-          } else {
-            audio.playClick();
-            refreshCurrentView();
-          }
+          audio.playClick();
+          refreshCurrentView();
         }
       }
 
@@ -522,9 +542,13 @@ void handleTouchPoint(int touchX, int touchY) {
       else if (currentView == VIEW_RGB_LAMP) {
         bool back = false;
         int mode = ui.handleRgbLampTouch(touchX, touchY, &back);
-        if (back) {
+        if (mode == 10) {
           audio.playClick();
-          currentView = VIEW_HOME;
+          currentView = VIEW_BREATHING;
+          breathingPhase = 0;
+          breathingSec = 4;
+          breathingCycle = 1;
+          led.setRaw(false, true, true);
           refreshCurrentView();
         } else if (mode >= 0) {
           audio.playClick();
@@ -572,6 +596,17 @@ void handleTouchPoint(int touchX, int touchY) {
 
       // --- VISTA AJUSTES ---
       else if (currentView == VIEW_SETTINGS) {
+        if (touchY >= 186 && touchY <= 234) {
+          audio.playClick();
+          if (touchX >= 52 && touchX <= 178) {
+            currentView = VIEW_BATTERY;
+          } else if (touchX >= 188 && touchX <= 314) {
+            currentView = VIEW_INFO;
+          }
+          refreshCurrentView();
+          return;
+        }
+
         bool tAuto = false, bDown = false, bUp = false, tMute = false,
              toToggle = false, nClock = false, oWifi = false, back = false;
         ui.handleSettingsTouch(touchX, touchY, &tAuto, &bDown, &bUp, &tMute,

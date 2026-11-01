@@ -52,6 +52,9 @@ public:
     void drawUnifiedStatusBar(const BatteryManager &battery, bool wifiConnected, bool audioMuted, 
                              bool autoBrightness, int streakCount, const char *appTitle = nullptr);
 
+    // --- NUEVO LEFT CYBER DOCK (RAIL OS) ---
+    void drawLeftRail(int activeTab, const BatteryManager &battery, bool wifiConnected);
+
     // --- ICONOS VECTORIALES A TODO COLOR ---
     void drawAppColorIcon(int cx, int cy, int appType);
 
