@@ -12,13 +12,17 @@ public:
     typedef void (*TouchCallback)(int x, int y);
     typedef void (*NavigateCallback)(int viewId);
     typedef void (*RefreshCallback)();
+    typedef void (*SyncCallback)();
+    typedef String (*StatusCallback)();
 
-    ScreenServer(TFT_eSPI &tft) : _tft(tft), _server(80), _touchCb(nullptr), _navCb(nullptr), _refreshCb(nullptr) {}
+    ScreenServer(TFT_eSPI &tft) : _tft(tft), _server(80), _touchCb(nullptr), _navCb(nullptr), _refreshCb(nullptr), _syncCb(nullptr), _statusCb(nullptr) {}
 
-    void begin(TouchCallback touchCb, NavigateCallback navCb, RefreshCallback refreshCb) {
+    void begin(TouchCallback touchCb, NavigateCallback navCb, RefreshCallback refreshCb, SyncCallback syncCb = nullptr, StatusCallback statusCb = nullptr) {
         _touchCb = touchCb;
         _navCb = navCb;
         _refreshCb = refreshCb;
+        _syncCb = syncCb;
+        _statusCb = statusCb;
 
         _server.on("/", HTTP_GET, [this]() {
             handleRoot();
@@ -36,6 +40,25 @@ public:
             handleNavigate();
         });
 
+        _server.on("/status", HTTP_GET, [this]() {
+            if (_statusCb) {
+                _server.send(200, "application/json", _statusCb());
+            } else {
+                _server.send(200, "text/plain", "OK");
+            }
+        });
+
+        _server.on("/sync", HTTP_GET, [this]() {
+            if (_syncCb) {
+                _syncCb();
+            }
+            if (_statusCb) {
+                _server.send(200, "application/json", _statusCb());
+            } else {
+                _server.send(200, "text/plain", "Sync triggered");
+            }
+        });
+
         _server.begin();
         Serial.printf("[ScreenServer] Servidor web de capturas iniciado en http://%s/\n", WiFi.localIP().toString().c_str());
     }
@@ -50,6 +73,8 @@ private:
     TouchCallback _touchCb;
     NavigateCallback _navCb;
     RefreshCallback _refreshCb;
+    SyncCallback _syncCb;
+    StatusCallback _statusCb;
 
     void handleScreenshotBmp() {
         WiFiClient client = _server.client();

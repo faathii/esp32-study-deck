@@ -151,6 +151,27 @@ void navigateToView(int viewId) {
   }
 }
 
+void triggerCalendarSync() {
+  Serial.println("[ScreenServer] Forzando sincronizacion con Google Calendar...");
+  calendar.syncGoogleCalendar(true);
+}
+
+String getSystemStatusJson() {
+  String ip = (wifi.isConnected()) ? WiFi.localIP().toString() : "0.0.0.0";
+  int rssi = (wifi.isConnected()) ? WiFi.RSSI() : 0;
+  String json = "{";
+  json += "\"wifi_connected\":" + String(wifi.isConnected() ? "true" : "false") + ",";
+  json += "\"ip\":\"" + ip + "\",";
+  json += "\"rssi\":" + String(rssi) + ",";
+  json += "\"gcal_configured\":" + String(calendar.isGoogleCalendarConfigured() ? "true" : "false") + ",";
+  json += "\"gcal_synced\":" + String(calendar.isSynced() ? "true" : "false") + ",";
+  json += "\"gcal_status\":\"" + calendar.getGoogleCalendarStatus() + "\",";
+  json += "\"last_sync\":\"" + calendar.getLastSyncString() + "\",";
+  json += "\"event_count\":" + String(calendar.getEventCount());
+  json += "}";
+  return json;
+}
+
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -179,10 +200,8 @@ void setup() {
   calendar.begin();
   weather.begin();
 
-  // 5. Inicializar Wi-Fi, Sincronización NTP (Hora España CET/CEST) y Servidor Remoto
-  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
+  // 5. Inicializar Wi-Fi
   wifi.begin();
-  screenServer.begin(handleTouchPoint, navigateToView, refreshCurrentView);
 
   // 6. Inicializar pantalla táctil y mostrar la vista predefinida (Clima &
   // Reloj Desk)
@@ -195,8 +214,19 @@ void setup() {
 }
 
 void loop() {
-  // 0. Atender peticiones del servidor de capturas y control HTTP
-  screenServer.handleClient();
+  // 0. Inicializar servicios de red (NTP y WebServer) una sola vez al obtener IP real
+  static bool netServicesStarted = false;
+  if (!netServicesStarted && wifi.isConnected()) {
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
+    screenServer.begin(handleTouchPoint, navigateToView, refreshCurrentView, triggerCalendarSync, getSystemStatusJson);
+    netServicesStarted = true;
+    Serial.printf("[WiFi] Conectado con exito. IP: %s\n", wifi.getLocalIP().c_str());
+  }
+
+  // 0.1 Atender peticiones del servidor de capturas y control HTTP
+  if (netServicesStarted) {
+    screenServer.handleClient();
+  }
 
   // 1. Motores lógicos principales
   PomodoroEvent pomoEv = pomodoro.update();
@@ -211,8 +241,16 @@ void loop() {
 
   led.update();
   battery.update();
-  weather.update(wifi.isConnected());
-  calendar.update(wifi.isConnected());
+  
+  if (wifi.isConnected()) {
+    weather.update(true);
+    // Escalonar calendar update para que no compita simultáneamente con weather en DNS/TLS
+    static unsigned long lastCalCheck = 0;
+    if (millis() - lastCalCheck > 4000) {
+      lastCalCheck = millis();
+      calendar.update(true);
+    }
+  }
 
   // 2. Automatización del Estudio Vinculada al Calendario y Reloj (Alarma de 3s y Pre-aviso 60s)
   time_t now = time(nullptr);

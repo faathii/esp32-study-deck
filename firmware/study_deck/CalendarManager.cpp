@@ -57,14 +57,10 @@ bool CalendarManager::syncGoogleCalendar(bool force) {
     }
 
     int count = 0;
-    CalendarEvent tempEvents[MAX_EVENTS];
-    bool ok = _gcal.fetchEvents(String(SECRET_GOOGLE_CALENDAR_URL), tempEvents, MAX_EVENTS, count);
+    bool ok = _gcal.fetchEvents(String(SECRET_GOOGLE_CALENDAR_URL), _events, MAX_EVENTS, count);
 
     if (ok && count > 0) {
         _eventCount = count;
-        for (int i = 0; i < count; i++) {
-            _events[i] = tempEvents[i];
-        }
         _lastAutoSync = millis();
         return true;
     } else if (ok && count == 0) {
@@ -570,10 +566,61 @@ int CalendarManager::getAgendaItems(AgendaListItem *outItems, int maxItems) cons
         }
     }
 
-    // 2. Agregar Sesiones de Estudio reales calendarizadas
+    // 2. Agregar Eventos sincronizados desde Google Calendar (o cargados en memoria)
+    for (int i = 0; i < _eventCount && count < maxItems; i++) {
+        long dNum = (long)_events[i].year * 10000 + _events[i].month * 100 + _events[i].day;
+        if (dNum >= curDateNum || _events[i].year == 0) {
+            char dBuf[16];
+            snprintf(dBuf, sizeof(dBuf), "%d %s", _events[i].day, mesesAbr[_events[i].month - 1]);
+
+            struct tm dTm = {0};
+            dTm.tm_year = (_events[i].year > 1900) ? (_events[i].year - 1900) : (curY - 1900);
+            dTm.tm_mon  = _events[i].month - 1;
+            dTm.tm_mday = _events[i].day;
+            dTm.tm_hour = _events[i].startHour;
+            dTm.tm_min  = _events[i].startMin;
+            time_t targetT = mktime(&dTm);
+            long diffSec = (long)difftime(targetT, now);
+            char cdBuf[24];
+            if (diffSec > 0) {
+                int d = diffSec / 86400;
+                int h = (diffSec % 86400) / 3600;
+                snprintf(cdBuf, sizeof(cdBuf), "En %dd %dh", d, h);
+            } else {
+                snprintf(cdBuf, sizeof(cdBuf), "Hoy");
+            }
+
+            outItems[count] = {
+                String(_events[i].title),
+                String(dBuf),
+                String(_events[i].timeRange),
+                String(cdBuf),
+                String(_events[i].location).length() > 0 ? String(_events[i].location) : "Google Calendar",
+                2, // 2 = Estudio
+                0x07FF, // Cian
+                _events[i].day,
+                _events[i].month,
+                _events[i].year
+            };
+            count++;
+        }
+    }
+
+    // 3. Complementar con eventos calendarizados oficiales si _eventCount era bajo
     for (int i = 0; i < NUM_DATED_EVENTS && count < maxItems; i++) {
         long dNum = (long)REAL_DATED_EVENTS[i].year * 10000 + REAL_DATED_EVENTS[i].month * 100 + REAL_DATED_EVENTS[i].day;
         if (dNum >= curDateNum) {
+            bool alreadyIn = false;
+            for (int k = 0; k < count; k++) {
+                if (outItems[k].day == REAL_DATED_EVENTS[i].day &&
+                    outItems[k].month == REAL_DATED_EVENTS[i].month &&
+                    outItems[k].title.indexOf(REAL_DATED_EVENTS[i].title) != -1) {
+                    alreadyIn = true;
+                    break;
+                }
+            }
+            if (alreadyIn) continue;
+
             char dBuf[16];
             snprintf(dBuf, sizeof(dBuf), "%d %s", REAL_DATED_EVENTS[i].day, mesesAbr[REAL_DATED_EVENTS[i].month - 1]);
             char tBuf[32];

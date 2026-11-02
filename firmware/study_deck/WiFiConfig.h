@@ -55,7 +55,9 @@ public:
     WiFiConnectStatus checkConnectStatus();
     void disconnect();
 
-    bool isConnected() const { return WiFi.status() == WL_CONNECTED; }
+    bool isConnected() const { 
+        return (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)); 
+    }
     String getSSID() const { return WiFi.SSID(); }
     String getLocalIP() const { return WiFi.localIP().toString(); }
     int32_t getRSSI() const { return WiFi.RSSI(); }

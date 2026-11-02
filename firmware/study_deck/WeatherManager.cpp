@@ -16,8 +16,9 @@ void WeatherManager::update(bool wifiConnected) {
     if (!wifiConnected) return;
 
     unsigned long now = millis();
-    // Actualizar cada 15 minutos (900,000 ms) o en el primer arranque con Wi-Fi
-    if (!_hasData || (now - _lastFetchTime >= 900000)) {
+    // Reintentar tras 60s si falló o cada 15 min (900000ms) si ya tiene datos
+    unsigned long interval = _hasData ? 900000 : 60000;
+    if (_lastFetchTime == 0 || (now - _lastFetchTime >= interval)) {
         forceRefresh(wifiConnected);
     }
 }

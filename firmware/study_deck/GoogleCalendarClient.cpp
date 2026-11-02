@@ -124,6 +124,10 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
         String line = stream->readStringUntil('\n');
         line.trim();
 
+        if (line.startsWith("END:VCALENDAR")) {
+            break;
+        }
+
         if (line.startsWith("BEGIN:VEVENT")) {
             inEvent = true;
             summary = "";
@@ -221,14 +225,14 @@ void GoogleCalendarClient::parseIcsStream(WiFiClient *stream, GCalEvent *outEven
                 }
 
                 // Criterio de aceptación para el curso 2026/2027:
-                long todayNum = (todayStr[0] != '\0') ? atol(todayStr) : 20261031;
+                long todayNum = (todayStr[0] != '\0') ? atol(todayStr) : 20261001;
                 bool accept = false;
                 if (isRecurring) {
                     if (untilDate == 0 || todayNum <= untilDate) {
                         accept = true;
                     }
                 } else {
-                    if (startDate >= todayNum || startDate >= 20261001) {
+                    if (startDate >= todayNum) {
                         accept = true;
                     }
                 }
