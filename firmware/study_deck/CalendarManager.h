@@ -31,6 +31,19 @@ struct AcademicDeadline {
     int targetHour;
 };
 
+struct AgendaListItem {
+    String title;
+    String dateStr;
+    String timeStr;
+    String countdown;
+    String location;
+    uint8_t type; // 0 = Examen/PEC (Coral), 1 = Tutoría (Purple), 2 = Sesión Estudio (Cyan)
+    uint16_t color;
+    int day;
+    int month;
+    int year;
+};
+
 class CalendarManager {
 public:
     void begin();
@@ -55,6 +68,7 @@ public:
     CalendarEvent getEvent(int index) const;
     const CalendarEvent* getEvents() const { return _events; }
     int getTodayEvents(CalendarEvent *outList, int maxOut) const;
+    int getAgendaItems(AgendaListItem *outItems, int maxItems) const;
     bool hasEventOnDate(int day, int month, int year) const;
     bool hasDeadlineOnDate(int day, int month, int year) const;
     String getEventSummaryForDate(int day, int month, int year) const;

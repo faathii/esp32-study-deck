@@ -15,10 +15,11 @@ desktop.ini
 *.tmp
 *.log
 
-# Entornos virtuales / Node
+# Entornos virtuales / Node / Scratch
 __pycache__/
 node_modules/
 .env
+scratch/
 
 # Archivos de credenciales y secretos privados (NUNCA SUBIR A GIT)
 Secrets.h

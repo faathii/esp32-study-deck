@@ -83,11 +83,12 @@ public:
                              const BatteryManager &battery, bool wifiConnected);
     UIButtonAction handlePomodoroTouch(int x, int y);
 
-    // --- 4. APLICACIÓN AGENDA ERGONÓMICA PARA PANTALLA 2.4" ---
-    void drawAgendaView(CalendarManager &calendar, const WiFiConfig &wifi, 
-                        const BatteryManager &battery, const WeatherManager &weather);
+    // --- 4. APLICACIÓN AGENDA ERGONÓMICA PARA PANTALLA 2.4" CON SCROLL Y DETALLE ---
+    void drawAgendaView(CalendarManager &calendar, const BatteryManager &battery, 
+                        int scrollOffset = 0, int selectedIndex = -1);
     void updateAgendaClock(CalendarManager &calendar, const WeatherManager &weather);
-    bool handleAgendaTouch(int x, int y, CalendarManager &calendar, bool *outAddExam, bool *outSyncGCal, bool *outBack);
+    bool handleAgendaTouch(int x, int y, CalendarManager &calendar, int &scrollOffset, 
+                           int &selectedIndex, bool *outStartFocus, String *outFocusTitle);
 
     // --- 5. APLICACIÓN DEDICADA: RELOJ NOCTURNO (NIGHT DESK CLOCK) ---
     void drawNightClockView(const BatteryManager &battery, const WeatherManager &weather);

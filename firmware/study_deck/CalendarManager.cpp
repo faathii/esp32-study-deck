@@ -514,3 +514,119 @@ bool CalendarManager::checkSessionEndTrigger() {
     return false;
 }
 
+int CalendarManager::getAgendaItems(AgendaListItem *outItems, int maxItems) const {
+    if (!outItems || maxItems <= 0) return 0;
+    int count = 0;
+
+    time_t now = time(nullptr);
+    struct tm *t = localtime(&now);
+    int curY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
+    int curM = (t->tm_year > 120) ? (t->tm_mon + 1) : 11;
+    int curD = (t->tm_year > 120) ? t->tm_mday : 1;
+    long curDateNum = (long)curY * 10000 + curM * 100 + curD;
+
+    const char *mesesAbr[12] = {"ENE", "FEB", "MAR", "ABR", "MAY", "JUN",
+                                "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"};
+
+    // 1. Agregar Deadlines reales (PECs y Exámenes oficiales)
+    for (int i = 0; i < NUM_REAL_DEADLINES && count < maxItems; i++) {
+        long dNum = (long)REAL_DEADLINES[i].year * 10000 + REAL_DEADLINES[i].month * 100 + REAL_DEADLINES[i].day;
+        if (dNum >= curDateNum) {
+            char dBuf[16];
+            snprintf(dBuf, sizeof(dBuf), "%d %s", REAL_DEADLINES[i].day, mesesAbr[REAL_DEADLINES[i].month - 1]);
+            char tBuf[16];
+            snprintf(tBuf, sizeof(tBuf), "%02d:%02d", REAL_DEADLINES[i].hour, REAL_DEADLINES[i].min);
+
+            struct tm dTm = {0};
+            dTm.tm_year = REAL_DEADLINES[i].year - 1900;
+            dTm.tm_mon = REAL_DEADLINES[i].month - 1;
+            dTm.tm_mday = REAL_DEADLINES[i].day;
+            dTm.tm_hour = REAL_DEADLINES[i].hour;
+            dTm.tm_min = REAL_DEADLINES[i].min;
+            time_t targetT = mktime(&dTm);
+            long diffSec = (long)difftime(targetT, now);
+            char cdBuf[24];
+            if (diffSec > 0) {
+                int d = diffSec / 86400;
+                int h = (diffSec % 86400) / 3600;
+                snprintf(cdBuf, sizeof(cdBuf), "En %dd %dh", d, h);
+            } else {
+                snprintf(cdBuf, sizeof(cdBuf), "Hoy");
+            }
+
+            outItems[count] = {
+                String(REAL_DEADLINES[i].title),
+                String(dBuf),
+                String(tBuf) + " LIMITE",
+                String(cdBuf),
+                "Sede UNED Avila / Plataforma aLF",
+                0, // 0 = Examen/PEC
+                0xFA80, // Coral
+                REAL_DEADLINES[i].day,
+                REAL_DEADLINES[i].month,
+                REAL_DEADLINES[i].year
+            };
+            count++;
+        }
+    }
+
+    // 2. Agregar Sesiones de Estudio reales calendarizadas
+    for (int i = 0; i < NUM_DATED_EVENTS && count < maxItems; i++) {
+        long dNum = (long)REAL_DATED_EVENTS[i].year * 10000 + REAL_DATED_EVENTS[i].month * 100 + REAL_DATED_EVENTS[i].day;
+        if (dNum >= curDateNum) {
+            char dBuf[16];
+            snprintf(dBuf, sizeof(dBuf), "%d %s", REAL_DATED_EVENTS[i].day, mesesAbr[REAL_DATED_EVENTS[i].month - 1]);
+            char tBuf[32];
+            snprintf(tBuf, sizeof(tBuf), "%02d:%02d - %02d:%02d",
+                     REAL_DATED_EVENTS[i].startHour, REAL_DATED_EVENTS[i].startMin,
+                     REAL_DATED_EVENTS[i].endHour, REAL_DATED_EVENTS[i].endMin);
+
+            struct tm dTm = {0};
+            dTm.tm_year = REAL_DATED_EVENTS[i].year - 1900;
+            dTm.tm_mon = REAL_DATED_EVENTS[i].month - 1;
+            dTm.tm_mday = REAL_DATED_EVENTS[i].day;
+            dTm.tm_hour = REAL_DATED_EVENTS[i].startHour;
+            dTm.tm_min = REAL_DATED_EVENTS[i].startMin;
+            time_t targetT = mktime(&dTm);
+            long diffSec = (long)difftime(targetT, now);
+            char cdBuf[24];
+            if (diffSec > 0) {
+                int d = diffSec / 86400;
+                int h = (diffSec % 86400) / 3600;
+                snprintf(cdBuf, sizeof(cdBuf), "En %dd %dh", d, h);
+            } else {
+                snprintf(cdBuf, sizeof(cdBuf), "Hoy");
+            }
+
+            outItems[count] = {
+                String(REAL_DATED_EVENTS[i].title),
+                String(dBuf),
+                String(tBuf),
+                String(cdBuf),
+                String(REAL_DATED_EVENTS[i].location).length() > 0 ? String(REAL_DATED_EVENTS[i].location) : "Escritorio / Estudio Personal",
+                2, // 2 = Estudio
+                0x07FF, // Cian
+                REAL_DATED_EVENTS[i].day,
+                REAL_DATED_EVENTS[i].month,
+                REAL_DATED_EVENTS[i].year
+            };
+            count++;
+        }
+    }
+
+    // Ordenar cronológicamente
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            long keyI = (long)outItems[i].year * 10000 + outItems[i].month * 100 + outItems[i].day;
+            long keyJ = (long)outItems[j].year * 10000 + outItems[j].month * 100 + outItems[j].day;
+            if (keyJ < keyI) {
+                AgendaListItem tmp = outItems[i];
+                outItems[i] = outItems[j];
+                outItems[j] = tmp;
+            }
+        }
+    }
+
+    return count;
+}
+

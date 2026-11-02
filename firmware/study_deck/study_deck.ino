@@ -50,6 +50,7 @@ unsigned long lastCandleTick = 0;
 bool candleFlickerState = false;
 
 // Configuración de pantalla y ahorro de energía
+#define TOUCH_RELAY_MS 1000 // Relay táctil: 1 pulsación por segundo máx. para evitar falsos toques
 unsigned long lastTouchTime = 0;
 unsigned long lastClockUpdate = 0;
 unsigned long lastLdrCheck = 0;
@@ -57,6 +58,10 @@ int currentBrightness = 200;
 bool autoBrightness = true;
 int timeoutMinutes = 2; // 1, 2, 5 o 0 (desactivado)
 bool screenDimmed = false;
+
+// Estado de navegación Agenda visual
+int agendaScrollOffset = 0;
+int selectedAgendaIndex = -1;
 
 // Rastreador de alarma para evitar repetición en el mismo minuto
 int lastAlarmMinute = -1;
@@ -88,7 +93,7 @@ void refreshCurrentView() {
                         audio.isMuted(), autoBrightness);
     break;
   case VIEW_AGENDA:
-    ui.drawAgendaView(calendar, wifi, battery, weather);
+    ui.drawAgendaView(calendar, battery, agendaScrollOffset, selectedAgendaIndex);
     break;
   case VIEW_STUDY_PROMPT:
     ui.drawStudyPromptView(currentStudySubject, studyPromptCountdown, battery, wifi.isConnected());
@@ -383,7 +388,7 @@ void loop() {
       return;
     }
 
-    if (millis() - lastTouchTime >= 180) {
+    if (millis() - lastTouchTime >= TOUCH_RELAY_MS) {
       lastTouchTime = millis();
 
       // Mapeo apaisado (320x240)
@@ -422,6 +427,7 @@ void handleTouchPoint(int touchX, int touchY) {
       currentView = VIEW_POMODORO; // Slot 1: FOCUS / POMODORO
     } else if (slot == 2) {
       currentView = VIEW_AGENDA; // Slot 2: CAL / AGENDA UNED
+      selectedAgendaIndex = -1;
     } else if (slot >= 3) {
       currentView = VIEW_SETTINGS; // Slot 3: SYS / CONTROL CENTER
     }
@@ -440,6 +446,7 @@ void handleTouchPoint(int touchX, int touchY) {
       currentView = VIEW_POMODORO;
     } else {
       currentView = VIEW_AGENDA;
+      selectedAgendaIndex = -1;
     }
     refreshCurrentView();
     return;
@@ -490,6 +497,7 @@ void handleTouchPoint(int touchX, int touchY) {
         } else if (appSelected == 4) { // 📅 Agenda UNED
           audio.playClick();
           currentView = VIEW_AGENDA;
+          selectedAgendaIndex = -1;
           refreshCurrentView();
         } else if (appSelected == 8) { // 🌤️ Clima
           audio.playClick();
@@ -584,18 +592,20 @@ void handleTouchPoint(int touchX, int touchY) {
         }
       }
 
-      // --- VISTA 3: APLICACIÓN AGENDA & GOOGLE CALENDAR ---
+      // --- VISTA 3: APLICACIÓN AGENDA ACADÉMICA UNED (SCROLL & MODAL) ---
       else if (currentView == VIEW_AGENDA) {
-        if (calendar.getViewMode() == CAL_VIEW_DAY && touchY >= 186) {
+        bool startFocus = false;
+        String focusTitle = "";
+        if (ui.handleAgendaTouch(touchX, touchY, calendar, agendaScrollOffset,
+                                 selectedAgendaIndex, &startFocus, &focusTitle)) {
           audio.playClick();
-          currentView = VIEW_POMODORO;
-          refreshCurrentView();
-          return;
-        }
-        bool addExam = false, syncGCal = false, back = false;
-        if (ui.handleAgendaTouch(touchX, touchY, calendar, &addExam, &syncGCal,
-                                 &back)) {
-          audio.playClick();
+          if (startFocus) {
+            if (focusTitle.length() > 0) {
+              currentStudySubject = focusTitle;
+            }
+            pomodoro.start();
+            currentView = VIEW_POMODORO;
+          }
           refreshCurrentView();
         }
       }

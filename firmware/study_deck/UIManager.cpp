@@ -548,257 +548,256 @@ UIButtonAction UIManager::handlePomodoroTouch(int x, int y) {
 // 4. APLICACIÓN AGENDA ACADÉMICA UNED (REDiseño TOTAL)
 // ============================================================================
 void UIManager::drawAgendaView(CalendarManager &calendar,
-                               const WiFiConfig & /*wifi*/,
                                const BatteryManager &battery,
-                               const WeatherManager & /*weather*/) {
+                               int scrollOffset,
+                               int selectedIndex) {
   _tft.fillScreen(COLOR_BG);
   drawLeftRail(2, battery, true); // Slot 2 = CAL
 
-  CalendarViewMode mode = calendar.getViewMode();
+  // Obtener items de la agenda
+  AgendaListItem items[24];
+  int totalItems = calendar.getAgendaItems(items, 24);
 
-  // Conmutador de 3 Modos Superior (x: 52..314, y: 4..26)
-  int tabW = 84;
-  const char *tabs[3] = {"HOY", "SEMANA", "MES"};
-  for (int i = 0; i < 3; i++) {
-    int tx = 52 + i * 89;
-    bool active = ((int)mode == i);
-    _tft.fillRoundRect(tx, 4, tabW, 22, 3,
-                       active ? COLOR_TEXT_PRIMARY : COLOR_CARD);
-    _tft.drawRoundRect(tx, 4, tabW, 22, 3,
-                       active ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
-    _tft.setTextColor(active ? COLOR_BG : COLOR_TEXT_SECONDARY,
-                      active ? COLOR_TEXT_PRIMARY : COLOR_CARD);
-    _tft.drawCentreString(tabs[i], tx + tabW / 2, 8, 2);
+  // Asegurar límites de scrollOffset
+  if (scrollOffset < 0) scrollOffset = 0;
+  if (totalItems > 3 && scrollOffset > totalItems - 3) {
+    scrollOffset = totalItems - 3;
+  } else if (totalItems <= 3) {
+    scrollOffset = 0;
   }
 
-  // --- MODO 1: HOY & HITOS DE EXÁMENES ---
-  if (mode == CAL_VIEW_DAY) {
-    String examTitle;
-    String countdown = calendar.getNextDeadlineCountdown(examTitle);
+  // 1. Barra de Encabezado Superior (x: 52..314, y: 4..28)
+  _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+  _tft.drawString("AGENDA UNED", 54, 7, 2);
 
-    // Tarjeta 1: Próximo Hito / Examen UNED (y: 32..90)
-    _tft.fillRoundRect(52, 32, 262, 58, 5, COLOR_CARD);
-    _tft.drawRoundRect(52, 32, 262, 58, 5, COLOR_BORDER);
-    _tft.fillCircle(64, 46, 4, COLOR_ACCENT_CYAN);
+  // Contador de elementos: "1-3 de 7"
+  if (totalItems > 0) {
+    char countBuf[24];
+    int startIdx = scrollOffset + 1;
+    int endIdx = min(scrollOffset + 3, totalItems);
+    snprintf(countBuf, sizeof(countBuf), "%d-%d de %d", startIdx, endIdx, totalItems);
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+    _tft.drawString(countBuf, 168, 8, 1);
+  }
+
+  // Botón Scroll Arriba [ ▲ ] (x: 232..268, y: 3..27)
+  bool canScrollUp = (scrollOffset > 0);
+  _tft.fillRoundRect(232, 3, 36, 24, 3, canScrollUp ? COLOR_CARD_HL : COLOR_CARD);
+  _tft.drawRoundRect(232, 3, 36, 24, 3, canScrollUp ? COLOR_ACCENT_CYAN : COLOR_BORDER);
+  _tft.setTextColor(canScrollUp ? COLOR_TEXT_PRIMARY : COLOR_TEXT_MUTED, canScrollUp ? COLOR_CARD_HL : COLOR_CARD);
+  _tft.drawCentreString("^", 250, 6, 2);
+
+  // Botón Scroll Abajo [ ▼ ] (x: 274..310, y: 3..27)
+  bool canScrollDown = (scrollOffset + 3 < totalItems);
+  _tft.fillRoundRect(274, 3, 36, 24, 3, canScrollDown ? COLOR_CARD_HL : COLOR_CARD);
+  _tft.drawRoundRect(274, 3, 36, 24, 3, canScrollDown ? COLOR_ACCENT_CYAN : COLOR_BORDER);
+  _tft.setTextColor(canScrollDown ? COLOR_TEXT_PRIMARY : COLOR_TEXT_MUTED, canScrollDown ? COLOR_CARD_HL : COLOR_CARD);
+  _tft.drawCentreString("v", 292, 6, 2);
+
+  // 2. Renderizado de 3 Tarjetas Visuales Grandes (y: 32..228)
+  if (totalItems == 0) {
+    _tft.fillRoundRect(52, 60, 262, 100, 6, COLOR_CARD);
+    _tft.drawRoundRect(52, 60, 262, 100, 6, COLOR_BORDER);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+    _tft.drawCentreString("Sin eventos pendientes", 183, 90, 2);
     _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-    _tft.drawString("PROXIMO EXAMEN / ENTREGA UNED", 74, 40, 1);
-    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-    _tft.drawString(examTitle.substring(0, 20), 64, 58, 2);
-    _tft.setTextColor(COLOR_ACCENT_CYAN, COLOR_CARD);
-    _tft.drawRightString(countdown, 304, 58, 2);
+    _tft.drawCentreString("Sincroniza Google Calendar", 183, 115, 1);
+  } else {
+    for (int i = 0; i < 3; i++) {
+      int itemIdx = scrollOffset + i;
+      int cardY = 32 + i * 66;
 
-    // Tarjeta 2: Sesión de Estudio de Hoy (y: 96..180)
-    _tft.fillRoundRect(52, 96, 262, 84, 5, COLOR_CARD);
-    _tft.drawRoundRect(52, 96, 262, 84, 5, COLOR_BORDER);
+      if (itemIdx < totalItems) {
+        const AgendaListItem &item = items[itemIdx];
 
-    CalendarEvent session;
-    bool hasSession = calendar.getTodayMainSession(session);
-    if (hasSession) {
-      _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
-      _tft.drawString("HORARIO DE ESTUDIO DE HOY:", 64, 104, 1);
-      _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-      _tft.drawString(session.timeRange, 64, 118, 4);
-      _tft.setTextColor(COLOR_ACCENT_CYAN, COLOR_CARD);
-      _tft.drawString(session.title, 64, 154, 2);
-    } else {
-      _tft.setTextColor(COLOR_ACCENT_EMERALD, COLOR_CARD);
-      _tft.drawCentreString("Hoy: Tiempo Libre / Repaso", 183, 118, 2);
-      _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-      _tft.drawCentreString("Avanza temas o descansa al 100%", 183, 144, 1);
-    }
+        // Fondo de la tarjeta y borde
+        _tft.fillRoundRect(52, cardY, 262, 62, 5, COLOR_CARD);
+        _tft.drawRoundRect(52, cardY, 262, 62, 5, COLOR_BORDER);
 
-    // Botón de Inicio Rápido a Pomodoro con la Materia (y: 186..234)
-    _tft.fillRoundRect(52, 186, 262, 46, 5, COLOR_CARD_HL);
-    _tft.drawRoundRect(52, 186, 262, 46, 5, COLOR_ACCENT_CORAL);
-    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD_HL);
-    _tft.drawCentreString("▶ ABRIR ENFOQUE POMODORO", 183, 200, 2);
-  }
+        // Barra lateral indicadora de color (x: 54..58)
+        _tft.fillRoundRect(54, cardY + 4, 4, 54, 2, item.color);
 
-  // --- MODO 2: SEMANA EN CURSO ---
-  else if (mode == CAL_VIEW_WEEK) {
-    time_t now = time(nullptr);
-    struct tm *t = localtime(&now);
-    int curD = (t->tm_year > 120) ? t->tm_mday : 1;
-    int curM = (t->tm_year > 120) ? (t->tm_mon + 1) : 11;
-    int curY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
-    int curWDay = (t->tm_year > 120) ? ((t->tm_wday + 6) % 7) : 6;
+        // Fila 1: Fecha / Badge + Cuenta Atras
+        _tft.setTextColor(item.color, COLOR_CARD);
+        _tft.drawString(item.dateStr, 64, cardY + 6, 1);
 
-    const char *dayNames[7] = {"L", "M", "X", "J", "V", "S", "D"};
+        _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
+        _tft.drawRightString(item.countdown, 304, cardY + 6, 1);
 
-    for (int i = 0; i < 7; i++) {
-      int offset = i - curWDay;
-      time_t dTime = now + (offset * 86400);
-      struct tm *dTm = localtime(&dTime);
-      int dNum = dTm->tm_mday;
-      int dMon = dTm->tm_mon + 1;
-      int dYear = dTm->tm_year + 1900;
-      bool isToday = (dNum == curD && dMon == curM && dYear == curY);
-
-      int rowY = 32 + i * 29;
-
-      // Etiqueta del día
-      _tft.fillRoundRect(52, rowY, 32, 26, 2,
-                         isToday ? COLOR_TEXT_PRIMARY : COLOR_CARD);
-      _tft.drawRoundRect(52, rowY, 32, 26, 2,
-                         isToday ? COLOR_TEXT_PRIMARY : COLOR_BORDER);
-      _tft.setTextColor(isToday ? COLOR_BG : COLOR_TEXT_SECONDARY,
-                        isToday ? COLOR_TEXT_PRIMARY : COLOR_CARD);
-      _tft.drawCentreString(dayNames[i], 68, rowY + 5, 2);
-
-      // Franja de sesión
-      _tft.fillRoundRect(88, rowY, 226, 26, 2, COLOR_CARD);
-      _tft.drawRoundRect(88, rowY, 226, 26, 2,
-                         isToday ? COLOR_ACCENT_CYAN : COLOR_BORDER);
-
-      String sum = calendar.getEventSummaryForDate(dNum, dMon, dYear);
-      if (sum.length() > 0) {
-        if (sum.length() > 28)
-          sum = sum.substring(0, 26) + "..";
+        // Fila 2: Título en letra clara
+        String dispTitle = item.title;
+        if (dispTitle.length() > 21) {
+          dispTitle = dispTitle.substring(0, 19) + "..";
+        }
         _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-        _tft.drawString(sum, 96, rowY + 6, 1);
-      } else {
+        _tft.drawString(dispTitle, 64, cardY + 20, 2);
+
+        // Fila 3: Horario y Ubicación
         _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-        _tft.drawString(isToday ? "Hoy sin sesion agendada" : "-- Libre --", 96,
-                        rowY + 6, 1);
+        String sub = item.timeStr;
+        if (sub.length() > 32) sub = sub.substring(0, 30) + "..";
+        _tft.drawString(sub, 64, cardY + 44, 1);
       }
     }
   }
 
-  // --- MODO 3: VISTA DE MES ENTERO ---
-  else if (mode == CAL_VIEW_MONTH) {
-    time_t now = time(nullptr);
-    struct tm *t = localtime(&now);
-    int curY = (t->tm_year > 120) ? (t->tm_year + 1900) : 2026;
-    int curM = (t->tm_year > 120) ? (t->tm_mon + 1) : 11;
-    int curD = (t->tm_year > 120) ? t->tm_mday : 1;
+  // 3. Modal de Detalle de Evento (si selectedIndex >= 0)
+  if (selectedIndex >= 0 && selectedIndex < totalItems) {
+    const AgendaListItem &sel = items[selectedIndex];
 
-    int dispM = curM + calendar.getMonthOffset();
-    int dispY = curY;
-    while (dispM > 12) {
-      dispM -= 12;
-      dispY++;
-    }
-    while (dispM < 1) {
-      dispM += 12;
-      dispY--;
-    }
+    // Modal centrado en x: 50..314 (ancho 264), y: 10..232 (alto 222)
+    _tft.fillRoundRect(50, 10, 264, 222, 6, COLOR_BG);
+    _tft.drawRoundRect(50, 10, 264, 222, 6, sel.color);
+    _tft.drawRoundRect(51, 11, 262, 220, 5, COLOR_BORDER);
 
-    const char *mesesFull[12] = {
-        "ENERO", "FEBRERO", "MARZO",      "ABRIL",   "MAYO",      "JUNIO",
-        "JULIO", "AGOSTO",  "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"};
+    // Cabecera del modal: Tipo y botón [X]
+    _tft.fillRoundRect(52, 12, 260, 26, 4, COLOR_CARD_HL);
+    _tft.setTextColor(sel.color, COLOR_CARD_HL);
+    const char *tagStr = (sel.type == 0) ? "HITO UNED / PEC" : ((sel.type == 1) ? "TUTORIA ACADEMICA" : "SESION DE ESTUDIO");
+    _tft.drawString(tagStr, 62, 18, 1);
 
-    // Botón mes anterior
-    _tft.fillRoundRect(52, 32, 28, 20, 3, COLOR_CARD);
-    _tft.drawRoundRect(52, 32, 28, 20, 3, COLOR_BORDER);
+    // Botón Cerrar [ X ] (x: 284..308, y: 14..34)
+    _tft.fillRoundRect(284, 14, 24, 20, 3, COLOR_CARD);
+    _tft.drawRoundRect(284, 14, 24, 20, 3, COLOR_BORDER);
     _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-    _tft.drawCentreString("<", 66, 34, 2);
+    _tft.drawCentreString("X", 296, 16, 2);
 
-    // Título Mes y Año
-    char titleBuf[32];
-    snprintf(titleBuf, sizeof(titleBuf), "%s %d", mesesFull[dispM - 1], dispY);
+    // Título Completo de la Materia / Evento (en 1 o 2 líneas)
     _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
-    _tft.drawCentreString(titleBuf, 183, 33, 2);
-
-    // Botón mes siguiente
-    _tft.fillRoundRect(286, 32, 28, 20, 3, COLOR_CARD);
-    _tft.drawRoundRect(286, 32, 28, 20, 3, COLOR_BORDER);
-    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-    _tft.drawCentreString(">", 300, 34, 2);
-
-    // Cabeceras de días de la semana
-    const char *wNames[7] = {"L", "M", "X", "J", "V", "S", "D"};
-    for (int col = 0; col < 7; col++) {
-      int cx = 56 + col * 37 + 18;
-      _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
-      _tft.drawCentreString(wNames[col], cx, 58, 1);
-    }
-    _tft.drawFastHLine(52, 68, 262, COLOR_BORDER);
-
-    int daysInM = 31;
-    if (dispM == 2) {
-      daysInM =
-          (dispY % 4 == 0 && (dispY % 100 != 0 || dispY % 400 == 0)) ? 29 : 28;
-    } else if (dispM == 4 || dispM == 6 || dispM == 9 || dispM == 11) {
-      daysInM = 30;
+    if (sel.title.length() <= 20) {
+      _tft.drawString(sel.title, 60, 46, 2);
+    } else {
+      int spaceIdx = sel.title.lastIndexOf(' ', 19);
+      if (spaceIdx <= 0) spaceIdx = 19;
+      String line1 = sel.title.substring(0, spaceIdx);
+      String line2 = sel.title.substring(spaceIdx + 1);
+      if (line2.length() > 22) line2 = line2.substring(0, 20) + "..";
+      _tft.drawString(line1, 60, 42, 2);
+      _tft.drawString(line2, 60, 60, 2);
     }
 
-    struct tm firstDay = {0};
-    firstDay.tm_year = dispY - 1900;
-    firstDay.tm_mon = dispM - 1;
-    firstDay.tm_mday = 1;
-    mktime(&firstDay);
-    int startWDay = (firstDay.tm_wday + 6) % 7;
+    // Información detallada
+    int infoY = 82;
+    _tft.drawFastHLine(60, infoY, 244, COLOR_BORDER);
+    infoY += 6;
 
-    int row = 0;
-    int col = startWDay;
-    for (int day = 1; day <= daysInM; day++) {
-      int cellX = 54 + col * 37;
-      int cellY = 72 + row * 26;
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+    _tft.drawString("Fecha:", 60, infoY, 1);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+    _tft.drawString(sel.dateStr, 110, infoY, 1);
+    infoY += 16;
 
-      bool isToday = (dispY == curY && dispM == curM && day == curD);
-      bool hasEvent = calendar.hasEventOnDate(day, dispM, dispY);
-      bool hasExam = calendar.hasDeadlineOnDate(day, dispM, dispY);
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+    _tft.drawString("Horario:", 60, infoY, 1);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+    _tft.drawString(sel.timeStr, 110, infoY, 1);
+    infoY += 16;
 
-      if (isToday) {
-        _tft.fillRoundRect(cellX + 4, cellY, 28, 20, 3, COLOR_TEXT_PRIMARY);
-        _tft.drawRoundRect(cellX + 3, cellY - 1, 30, 22, 3, COLOR_ACCENT_CYAN);
-        _tft.setTextColor(COLOR_BG, COLOR_TEXT_PRIMARY);
-      } else {
-        _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
-      }
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+    _tft.drawString("Ubicacion:", 60, infoY, 1);
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_BG);
+    String loc = sel.location;
+    if (loc.length() > 22) loc = loc.substring(0, 20) + "..";
+    _tft.drawString(loc, 120, infoY, 1);
+    infoY += 16;
 
-      _tft.drawCentreString(String(day), cellX + 18, cellY + 3, 2);
+    _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_BG);
+    _tft.drawString("Cuenta atras:", 60, infoY, 1);
+    _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_BG);
+    _tft.drawString(sel.countdown, 138, infoY, 1);
 
-      if (hasEvent || hasExam) {
-        uint16_t dotCol = hasExam ? COLOR_ACCENT_CORAL
-                                  : (isToday ? COLOR_BG : COLOR_ACCENT_CYAN);
-        _tft.drawFastHLine(cellX + 10, cellY + 18, 16, dotCol);
-      }
-
-      col++;
-      if (col > 6) {
-        col = 0;
-        row++;
-      }
-    }
+    // Botón de Acción Principal: [ ▶ ESTUDIAR AHORA ] (y: 178..220)
+    _tft.fillRoundRect(60, 178, 244, 42, 6, COLOR_ACCENT_EMERALD);
+    _tft.drawRoundRect(60, 178, 244, 42, 6, COLOR_TEXT_PRIMARY);
+    _tft.setTextColor(COLOR_BG, COLOR_ACCENT_EMERALD);
+    _tft.drawCentreString("ESTUDIAR AHORA", 182, 190, 2);
   }
+
 }
 
 void UIManager::updateAgendaClock(CalendarManager & /*calendar*/,
                                   const WeatherManager & /*weather*/) {}
 
 bool UIManager::handleAgendaTouch(int x, int y, CalendarManager &calendar,
-                                  bool *outAddExam, bool *outSyncGCal,
-                                  bool *outBack) {
-  *outAddExam = false;
-  *outSyncGCal = false;
-  *outBack = false;
+                                  int &scrollOffset, int &selectedIndex,
+                                  bool *outStartFocus, String *outFocusTitle) {
+  if (outStartFocus) *outStartFocus = false;
+  if (outFocusTitle) *outFocusTitle = "";
 
-  // Conmutador de 3 Modos (y: 0..30)
-  if (y >= 0 && y <= 30 && x >= 52) {
-    if (x >= 52 && x <= 138) {
-      calendar.setViewMode(CAL_VIEW_DAY);
+  AgendaListItem items[24];
+  int totalItems = calendar.getAgendaItems(items, 24);
+
+  // 1. Si el modal esta abierto:
+  if (selectedIndex >= 0 && selectedIndex < totalItems) {
+    // A. Boton de cierre [ X ] (x: 275..314, y: 10..40)
+    if (x >= 275 && x <= 314 && y >= 10 && y <= 40) {
+      selectedIndex = -1;
       return true;
     }
-    if (x >= 140 && x <= 226) {
-      calendar.setViewMode(CAL_VIEW_WEEK);
+
+    // B. Boton [ ESTUDIAR AHORA ] (x: 60..304, y: 175..225)
+    if (x >= 60 && x <= 304 && y >= 175 && y <= 225) {
+      if (outStartFocus) *outStartFocus = true;
+      if (outFocusTitle) *outFocusTitle = items[selectedIndex].title;
+      selectedIndex = -1;
       return true;
     }
-    if (x >= 228 && x <= 314) {
-      calendar.setViewMode(CAL_VIEW_MONTH);
+
+    // Tocar fuera del modal tambien lo cierra
+    if (x < 50 || x > 314 || y < 10 || y > 232) {
+      selectedIndex = -1;
       return true;
+    }
+
+    return false;
+  }
+
+  // 2. Si estamos en la lista general:
+  // A. Botones de Scroll Arriba y Abajo (y: 0..30)
+  if (y >= 0 && y <= 30) {
+    // Scroll Arriba [ ^ ] (x: 228..268)
+    if (x >= 228 && x <= 268) {
+      if (scrollOffset > 0) {
+        scrollOffset--;
+        return true;
+      }
+      return false;
+    }
+    // Scroll Abajo [ v ] (x: 270..314)
+    if (x >= 270 && x <= 314) {
+      if (scrollOffset + 3 < totalItems) {
+        scrollOffset++;
+        return true;
+      }
+      return false;
     }
   }
 
-  // Navegación en vista de mes
-  if (calendar.getViewMode() == CAL_VIEW_MONTH && y >= 30 && y <= 60) {
-    if (x >= 52 && x <= 90) {
-      calendar.changeMonth(-1);
-      return true;
+  // B. Pulsacion sobre una de las 3 tarjetas (x: 52..314)
+  if (x >= 52 && x <= 314) {
+    // Tarjeta 0: y: 32..94
+    if (y >= 32 && y <= 94) {
+      int clicked = scrollOffset + 0;
+      if (clicked < totalItems) {
+        selectedIndex = clicked;
+        return true;
+      }
     }
-    if (x >= 270 && x <= 314) {
-      calendar.changeMonth(1);
-      return true;
+    // Tarjeta 1: y: 98..160
+    else if (y >= 98 && y <= 160) {
+      int clicked = scrollOffset + 1;
+      if (clicked < totalItems) {
+        selectedIndex = clicked;
+        return true;
+      }
+    }
+    // Tarjeta 2: y: 164..226
+    else if (y >= 164 && y <= 226) {
+      int clicked = scrollOffset + 2;
+      if (clicked < totalItems) {
+        selectedIndex = clicked;
+        return true;
+      }
     }
   }
 
