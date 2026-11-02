@@ -203,6 +203,8 @@ private:
             else if (v == "battery") targetView = 9;
             else if (v == "stats") targetView = 10;
             else if (v == "wifi") targetView = 12;
+            else if (v == "prompt") targetView = 16;
+            else if (v == "checkpoint") targetView = 17;
 
             if (targetView >= 0) {
                 _navCb(targetView);

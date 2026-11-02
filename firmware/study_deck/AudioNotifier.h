@@ -73,6 +73,16 @@ public:
         noTone(PIN_BUZZER);
     }
 
+    // Chime suave de 2 notas para los 5 checkpoints diarios
+    void playDailyReminderSound() {
+        if (_muted) return;
+        tone(PIN_BUZZER, 1760, 90);
+        delay(110);
+        tone(PIN_BUZZER, 2349, 140);
+        delay(150);
+        noTone(PIN_BUZZER);
+    }
+
 private:
     bool _muted = false;
 };

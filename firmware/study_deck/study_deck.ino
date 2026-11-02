@@ -52,13 +52,27 @@ bool candleFlickerState = false;
 // Configuración de pantalla y ahorro de energía
 unsigned long lastTouchTime = 0;
 unsigned long lastClockUpdate = 0;
-int currentBrightness = 220;
+unsigned long lastLdrCheck = 0;
+int currentBrightness = 200;
 bool autoBrightness = true;
 int timeoutMinutes = 2; // 1, 2, 5 o 0 (desactivado)
 bool screenDimmed = false;
 
 // Rastreador de alarma para evitar repetición en el mismo minuto
 int lastAlarmMinute = -1;
+
+// Variables de Automatización de Estudio (Grace Period 60s & Snooze)
+int studyPromptCountdown = 60;
+unsigned long lastStudyPromptTick = 0;
+String currentStudySubject = "Sistemas Informaticos";
+unsigned long snoozeUntil = 0;
+
+// Variables de los 5 Checkpoints Diarios
+int lastCheckpointHour = -1;
+int lastCheckpointMin = -1;
+int activeCheckpointIdx = -1;
+unsigned long checkpointStartTime = 0;
+AppView previousViewBeforeCheckpoint = VIEW_WEATHER;
 
 void refreshCurrentView() {
   switch (currentView) {
@@ -75,6 +89,12 @@ void refreshCurrentView() {
     break;
   case VIEW_AGENDA:
     ui.drawAgendaView(calendar, wifi, battery, weather);
+    break;
+  case VIEW_STUDY_PROMPT:
+    ui.drawStudyPromptView(currentStudySubject, studyPromptCountdown, battery, wifi.isConnected());
+    break;
+  case VIEW_DAILY_CHECKPOINT:
+    ui.drawDailyCheckpointView(activeCheckpointIdx, calendar, battery, wifi.isConnected());
     break;
   case VIEW_NIGHT_CLOCK:
     ui.drawNightClockView(battery, weather);
@@ -109,8 +129,14 @@ void refreshCurrentView() {
 void handleTouchPoint(int touchX, int touchY);
 
 void navigateToView(int viewId) {
-  if (viewId >= 0 && viewId <= 15) {
+  if (viewId >= 0 && viewId <= 18) {
     currentView = (AppView)viewId;
+    if (currentView == VIEW_DAILY_CHECKPOINT) {
+      checkpointStartTime = millis();
+    } else if (currentView == VIEW_STUDY_PROMPT) {
+      studyPromptCountdown = 60;
+      lastStudyPromptTick = millis();
+    }
     if (currentView == VIEW_NIGHT_CLOCK) {
       analogWrite(PIN_BACKLIGHT, 25);
     } else {
@@ -137,10 +163,10 @@ void setup() {
   pinMode(PIN_LDR, INPUT);
   battery.begin();
 
-  // 3. Inicializar audio y LED RGB
+  // 3. Inicializar audio y LED RGB (LED estrictamente apagado salvo alarmas)
   audio.begin();
   led.begin();
-  led.setMode(LED_MODE_IDLE);
+  led.turnOff();
 
   // 4. Inicializar MicroSD, Pomodoro, Calendario y Clima
   storage.begin();
@@ -171,11 +197,11 @@ void loop() {
   PomodoroEvent pomoEv = pomodoro.update();
   if (pomoEv == POMO_EVENT_FOCUS_COMPLETE) {
     audio.playWorkFinished();
-    led.setMode(LED_MODE_BREAK);
+    led.flashAlert(3000, true, true, true); // Destello LED solo durante alarma
     storage.logSession("Enfoque", pomodoro.getFocusMinutes(), true);
   } else if (pomoEv == POMO_EVENT_BREAK_COMPLETE) {
     audio.playBreakFinished();
-    led.setMode(LED_MODE_FOCUS);
+    led.flashAlert(3000, true, true, true); // Destello LED solo durante alarma
   }
 
   led.update();
@@ -183,8 +209,7 @@ void loop() {
   weather.update(wifi.isConnected());
   calendar.update(wifi.isConnected());
 
-  // 2. Automatización del Estudio Vinculada al Calendario y Reloj (Alarma de
-  // 3s)
+  // 2. Automatización del Estudio Vinculada al Calendario y Reloj (Alarma de 3s y Pre-aviso 60s)
   time_t now = time(nullptr);
   struct tm *t = localtime(&now);
 
@@ -192,25 +217,95 @@ void loop() {
     // A. Inicio de sesión agendada de estudio
     CalendarEvent startEv;
     if (calendar.checkSessionStartTrigger(startEv)) {
-      lastAlarmMinute = t->tm_min;
-      Serial.printf("[StudyDeck] INICIO DE SESION DE ESTUDIO: %s\n",
-                    startEv.title.c_str());
-      audio.playStudyAlarm3s();
-      currentView = VIEW_POMODORO;
-      screenDimmed = false;
-      analogWrite(PIN_BACKLIGHT, currentBrightness);
-      refreshCurrentView();
+      if (millis() >= snoozeUntil) {
+        lastAlarmMinute = t->tm_min;
+        currentStudySubject = (startEv.title.length() > 0) ? startEv.title : "Sistemas Informaticos";
+        studyPromptCountdown = 60;
+        lastStudyPromptTick = millis();
+        Serial.printf("[StudyDeck] INICIO DE SESION DE ESTUDIO: %s\n", currentStudySubject.c_str());
+        audio.playStudyAlarm3s();
+        led.flashAlert(3000, true, true, true); // Destello durante los 3s de alarma
+        currentView = VIEW_STUDY_PROMPT;
+        screenDimmed = false;
+        analogWrite(PIN_BACKLIGHT, currentBrightness);
+        refreshCurrentView();
+      }
     }
     // B. Fin de horario de estudio agendado
     else if (calendar.checkSessionEndTrigger()) {
       lastAlarmMinute = t->tm_min;
-      Serial.println(
-          "[StudyDeck] FIN DE HORARIO DE ESTUDIO. Regresando a Clima.");
+      Serial.println("[StudyDeck] FIN DE HORARIO DE ESTUDIO. Regresando a Standby.");
       audio.playStudyAlarm3s();
+      led.flashAlert(3000, true, true, true);
       currentView = VIEW_WEATHER;
       screenDimmed = false;
       analogWrite(PIN_BACKLIGHT, currentBrightness);
       refreshCurrentView();
+    }
+  }
+
+  // 2.1. Conteo regresivo del Pre-aviso de Estudio (60 segundos)
+  if (currentView == VIEW_STUDY_PROMPT) {
+    if (millis() - lastStudyPromptTick >= 1000) {
+      lastStudyPromptTick = millis();
+      studyPromptCountdown--;
+      if (studyPromptCountdown <= 0) {
+        // Auto-arranque sin intervención manual
+        pomodoro.start();
+        currentView = VIEW_POMODORO;
+        refreshCurrentView();
+      } else {
+        ui.updateStudyPromptCountdown(studyPromptCountdown);
+      }
+    }
+  }
+
+  // 2.2. Disparo de los 5 Checkpoints Diarios (09:00, 12:00, 15:30, 19:30, 22:00)
+  if (t->tm_year > 120) {
+    int chkIdx = -1;
+    if (t->tm_hour == 9 && t->tm_min == 0) chkIdx = 0;
+    else if (t->tm_hour == 12 && t->tm_min == 0) chkIdx = 1;
+    else if (t->tm_hour == 15 && t->tm_min == 30) chkIdx = 2;
+    else if (t->tm_hour == 19 && t->tm_min == 30) chkIdx = 3;
+    else if (t->tm_hour == 22 && t->tm_min == 0) chkIdx = 4;
+
+    if (chkIdx >= 0 && (t->tm_hour != lastCheckpointHour || t->tm_min != lastCheckpointMin)) {
+      lastCheckpointHour = t->tm_hour;
+      lastCheckpointMin = t->tm_min;
+      // Regla DND: Si el usuario está concentrado en un Pomodoro activo, no molestar con sonido
+      if (!(currentView == VIEW_POMODORO && pomodoro.isFocus())) {
+        audio.playDailyReminderSound();
+        led.flashAlert(1500, false, true, true);
+        previousViewBeforeCheckpoint = currentView;
+        activeCheckpointIdx = chkIdx;
+        currentView = VIEW_DAILY_CHECKPOINT;
+        checkpointStartTime = millis();
+        screenDimmed = false;
+        analogWrite(PIN_BACKLIGHT, currentBrightness);
+        refreshCurrentView();
+      }
+    }
+  }
+
+  // Auto-cierre de pantalla Checkpoint tras 15 segundos
+  if (currentView == VIEW_DAILY_CHECKPOINT) {
+    if (millis() - checkpointStartTime >= 15000) {
+      currentView = previousViewBeforeCheckpoint;
+      refreshCurrentView();
+    }
+  }
+
+  // 2.3. Regulación de Brillo Adaptativo por Sensor LDR (Ultra-tenue en oscuridad)
+  if (autoBrightness && (millis() - lastLdrCheck >= 400)) {
+    lastLdrCheck = millis();
+    int rawLdr = analogRead(PIN_LDR);
+    // Mapeo suave: oscuridad -> brillo ultra-tenue (10 PWM / ~4%), luz -> 220 PWM
+    int targetBri = map(constrain(rawLdr, 300, 3700), 300, 3700, 10, 220);
+    currentBrightness = (currentBrightness * 7 + targetBri) / 8;
+    if (currentBrightness < 10) currentBrightness = 10;
+    if (currentBrightness > 255) currentBrightness = 255;
+    if (!screenDimmed) {
+      analogWrite(PIN_BACKLIGHT, currentBrightness);
     }
   }
 
@@ -228,7 +323,7 @@ void loop() {
     }
   }
 
-  // 4. Animación de Respiración Box Breathing (4-4-4-4)
+  // 4. Animación de Respiración Box Breathing (4-4-4-4) - Sin LED residual
   if (currentView == VIEW_BREATHING) {
     if (millis() - lastBreathingTick >= 1000) {
       lastBreathingTick = millis();
@@ -239,31 +334,8 @@ void loop() {
         if (breathingPhase == 0) {
           breathingCycle = (breathingCycle % 4) + 1;
         }
-        if (breathingPhase == 0)
-          led.setRaw(false, true, true); // Inhala: Cian suave
-        else if (breathingPhase == 1)
-          led.setRaw(false, true, true); // Mantén: Cian
-        else if (breathingPhase == 2)
-          led.setRaw(false, false, true); // Exhala: Azul profundo
-        else
-          led.setRaw(false, false, false); // Pausa: Apagado
       }
-      ui.drawBreathingView(breathingPhase, breathingSec, breathingCycle,
-                           battery);
-    }
-  }
-
-  // 5. Efecto parpadeo suave vela en modo lámpara vela
-  if (lampMode == 4 &&
-      (currentView == VIEW_RGB_LAMP || currentView == VIEW_WEATHER)) {
-    if (millis() - lastCandleTick >= 120) {
-      lastCandleTick = millis();
-      candleFlickerState = !candleFlickerState;
-      if (candleFlickerState) {
-        led.setRaw(true, true, false); // Ámbar cálido
-      } else {
-        led.setRaw(true, false, false);
-      }
+      ui.drawBreathingView(breathingPhase, breathingSec, breathingCycle, battery);
     }
   }
 
@@ -343,16 +415,15 @@ void handleTouchPoint(int touchX, int touchY) {
   // ========================================================================
   if (touchX >= 0 && touchX <= 46) {
     audio.playClick();
-    if (touchY >= 0 && touchY < 48) {
+    int slot = touchY / 60; // 4 Ranuras ergonómicas de 60 px
+    if (slot == 0) {
       currentView = VIEW_WEATHER; // Slot 0: DESK / STANDBY
-    } else if (touchY >= 48 && touchY < 96) {
+    } else if (slot == 1) {
       currentView = VIEW_POMODORO; // Slot 1: FOCUS / POMODORO
-    } else if (touchY >= 96 && touchY < 144) {
+    } else if (slot == 2) {
       currentView = VIEW_AGENDA; // Slot 2: CAL / AGENDA UNED
-    } else if (touchY >= 144 && touchY < 192) {
-      currentView = VIEW_RGB_LAMP; // Slot 3: LAMP / AURA
-    } else if (touchY >= 192 && touchY < 240) {
-      currentView = VIEW_SETTINGS; // Slot 4: SYS / CONTROL CENTER
+    } else if (slot >= 3) {
+      currentView = VIEW_SETTINGS; // Slot 3: SYS / CONTROL CENTER
     }
     refreshCurrentView();
     return;
@@ -365,13 +436,39 @@ void handleTouchPoint(int touchX, int touchY) {
   // --- VISTA 0: PANTALLA PREDEFINIDA CLIMA & RADAR DESK (STANDBY) ---
   if (currentView == VIEW_WEATHER) {
     audio.playClick();
-    // Si toca la tarjeta inferior de radar académico, abre Pomodoro
     if (touchY >= 122) {
       currentView = VIEW_POMODORO;
     } else {
       currentView = VIEW_AGENDA;
     }
     refreshCurrentView();
+    return;
+  }
+
+  // --- VISTA: PRE-AVISO DE ESTUDIO (PROMPT 60s) ---
+  else if (currentView == VIEW_STUDY_PROMPT) {
+    UIButtonAction act = ui.handleStudyPromptTouch(touchX, touchY);
+    if (act == UI_ACTION_PROMPT_START) {
+      audio.playClick();
+      pomodoro.start();
+      currentView = VIEW_POMODORO;
+      refreshCurrentView();
+    } else if (act == UI_ACTION_PROMPT_SNOOZE) {
+      audio.playClick();
+      snoozeUntil = millis() + (5UL * 60UL * 1000UL); // Aplazar 5 min
+      currentView = VIEW_WEATHER;
+      refreshCurrentView();
+    }
+    return;
+  }
+
+  // --- VISTA: CHECKPOINT DIARIO (1/5) ---
+  else if (currentView == VIEW_DAILY_CHECKPOINT) {
+    if (ui.handleDailyCheckpointTouch(touchX, touchY)) {
+      audio.playClick();
+      currentView = previousViewBeforeCheckpoint;
+      refreshCurrentView();
+    }
     return;
   }
 

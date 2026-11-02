@@ -27,7 +27,9 @@ enum AppView {
     VIEW_WIFI_SCAN,       // Escaneo de redes Wi-Fi
     VIEW_WIFI_KEYBOARD,   // Teclado para contraseña Wi-Fi
     VIEW_WIFI_CONNECTING, // Pantalla de conexión Wi-Fi
-    VIEW_WIFI_RESULT      // Resultado de conexión Wi-Fi
+    VIEW_WIFI_RESULT,     // Resultado de conexión Wi-Fi
+    VIEW_STUDY_PROMPT,    // Pantalla de cortesía 60s antes de auto-arranque Pomodoro
+    VIEW_DAILY_CHECKPOINT // Pantalla de aviso de checkpoint diario (5 al día)
 };
 
 enum UIButtonAction {
@@ -39,7 +41,10 @@ enum UIButtonAction {
     UI_ACTION_SELECT_25,
     UI_ACTION_SELECT_50,
     UI_ACTION_SELECT_90,
-    UI_ACTION_OPEN_WIFI
+    UI_ACTION_OPEN_WIFI,
+    UI_ACTION_PROMPT_START,
+    UI_ACTION_PROMPT_SNOOZE,
+    UI_ACTION_DISMISS_CHECKPOINT
 };
 
 class UIManager {
@@ -122,6 +127,14 @@ public:
     int handleWiFiScanTouch(int x, int y, int netCount, int page, bool *outRescan, bool *outBack, bool *outNextPage);
     void drawWiFiConnecting(const String &ssid);
     void drawWiFiResult(bool success, const String &info);
+
+    // --- NUEVAS VISTAS DE DISCIPLINA Y AUTOMATIZACIÓN (CORE) ---
+    void drawStudyPromptView(const String &subject, int countdownSec, const BatteryManager &battery, bool wifiConnected);
+    void updateStudyPromptCountdown(int countdownSec);
+    UIButtonAction handleStudyPromptTouch(int x, int y);
+
+    void drawDailyCheckpointView(int checkpointIndex, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    bool handleDailyCheckpointTouch(int x, int y);
 
 private:
     TFT_eSPI &_tft;
