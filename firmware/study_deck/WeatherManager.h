@@ -12,6 +12,11 @@ public:
     void update(bool wifiConnected); // Consulta periódica no bloqueante
 
     bool hasData() const { return _hasData; }
+    bool consumeNewData() {
+        bool temp = _hasNewData;
+        _hasNewData = false;
+        return temp;
+    }
     float getTemperature() const { return _temperature; }
     int getHumidity() const { return _humidity; }
     int getWeatherCode() const { return _weatherCode; }
@@ -23,13 +28,14 @@ public:
     void forceRefresh(bool wifiConnected);
 
 private:
-    float _latitude = 40.4168f;  // Madrid por defecto
-    float _longitude = -3.7038f;
-    String _cityName = "Madrid";
+    float _latitude = 40.6565f;  // Ávila (40°39'23" N)
+    float _longitude = -4.6818f; // Ávila (4°40'54" O)
+    String _cityName = "Avila";
 
     bool _hasData = false;
-    float _temperature = 18.0f;
-    int _humidity = 55;
+    bool _hasNewData = false;
+    float _temperature = 14.0f;
+    int _humidity = 60;
     int _weatherCode = 0;
     unsigned long _lastFetchTime = 0;
     bool _isFetching = false;

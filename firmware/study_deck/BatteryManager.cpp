@@ -43,23 +43,28 @@ float BatteryManager::readRawVoltage() {
 }
 
 int BatteryManager::calculatePercentage(float v) {
-    // Si la lectura es anormalmente baja (<2.5V, pin flotante o sin batería conectada),
-    // asumimos que el dispositivo está alimentado por USB fijo
-    if (v < 2.5f) {
-        _isCharging = true;
-        return 100;
+    // Si la lectura en GPIO 35 es inferior a 1.5V, significa que el pin está flotante o a masa
+    // porque la placa no tiene divisor resistivo conectado a una batería. Está por USB continuo.
+    if (v < 1.5f) {
+        _hasBatterySense = false;
+        _isUsbPowered = true;
+        _isCharging = false;
+        return -1; // Modo USB 5V fijo
     }
 
-    // Tensión superior a 4.23V indica presencia del cargador USB activo
-    if (v >= 4.23f) {
+    _hasBatterySense = true;
+
+    // Tensión de celda LiPo superior a 4.22V indica cargador USB activo cargando la batería
+    if (v >= 4.22f) {
         _isCharging = true;
+        _isUsbPowered = true;
         return 100;
     }
 
     _isCharging = false;
+    _isUsbPowered = false;
 
     // Curva de descarga característica para celda LiPo 1S de 5000 mAh (3.7V / 18.5Wh)
-    // con baja tasa de descarga (~0.04C)
     if (v >= 4.18f) return 100;
     if (v >= 4.10f) return 90 + (int)((v - 4.10f) / 0.08f * 10);
     if (v >= 4.00f) return 80 + (int)((v - 4.00f) / 0.10f * 10);
@@ -79,43 +84,47 @@ void BatteryManager::update() {
         _lastReadTime = now;
 
         float instantV = readRawVoltage();
-        // Filtro exponencial para eliminar ruido de alta frecuencia del ADC
-        _smoothedVoltage = (_smoothedVoltage * 0.88f) + (instantV * 0.12f);
+        _smoothedVoltage = (_smoothedVoltage * 0.85f) + (instantV * 0.15f);
 
         int targetPct = calculatePercentage(_smoothedVoltage + _calOffset);
-        if (abs(targetPct - _percentage) >= 1) {
-            _percentage = targetPct;
-        }
+        _percentage = targetPct;
     }
 }
 
 float BatteryManager::getEstimatedHoursLeft() const {
-    if (_isCharging) return 99.0f; // Conectado a USB
+    if (!_hasBatterySense || _percentage < 0) return 99.0f; // Alimentado por USB continuo
     float remainingMah = ((float)_percentage / 100.0f) * (float)BATTERY_CAPACITY_MAH;
     return remainingMah / BATTERY_AVG_DRAW_MA;
 }
 
 uint16_t BatteryManager::getStatusColor() const {
+    if (!_hasBatterySense || _percentage < 0) return 0x07E0; // Verde USB continuo
     if (_percentage > 40) return COLOR_BAT_GOOD;
     if (_percentage > 18) return COLOR_BAT_MEDIUM;
     return COLOR_BAT_LOW;
 }
 
 String BatteryManager::getFormattedText() const {
+    if (!_hasBatterySense || _percentage < 0) {
+        return "USB 5V";
+    }
     if (_isCharging) {
-        return "CARGANDO";
+        return String(_percentage) + "% [CARGA]";
     }
     return String(_percentage) + "%";
 }
 
 String BatteryManager::getRuntimeString() const {
+    if (!_hasBatterySense || _percentage < 0) {
+        return "Alimentacion continua USB 5V";
+    }
     if (_isCharging) {
-        return "Alimentacion USB / Cargando";
+        return "Cargando bateria LiPo...";
     }
     float hours = getEstimatedHoursLeft();
     int h = (int)hours;
     int m = (int)((hours - h) * 60);
-    char buf[24];
+    char buf[28];
     snprintf(buf, sizeof(buf), "~%dh %02dm restantes", h, m);
     return String(buf);
 }

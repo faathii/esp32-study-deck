@@ -2,6 +2,8 @@
 
 void WiFiConfig::begin() {
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.persistent(true);
     _prefs.begin("study_wifi", false);
 
     // Si hay credenciales definidas en Secrets.h y no están en NVS, guardarlas y conectar
@@ -11,6 +13,8 @@ void WiFiConfig::begin() {
     } else if (hasSavedCredentials()) {
         // Conexión automática con las credenciales guardadas en NVS
         startConnect(getSavedSSID(), getSavedPassword());
+    } else if (strlen(SECRET_WIFI_SSID) > 0) {
+        startConnect(SECRET_WIFI_SSID, SECRET_WIFI_PASS);
     }
 }
 
@@ -84,6 +88,28 @@ WiFiConnectStatus WiFiConfig::checkConnectStatus() {
         return WIFI_STATUS_FAILED;
     }
     return WIFI_STATUS_CONNECTING;
+}
+
+void WiFiConfig::update() {
+    // Si ya está conectado y con IP real válida asignada, no hacer nada
+    if (isConnected()) {
+        _lastReconnectAttempt = 0;
+        return;
+    }
+
+    // Watchdog: reintentar cada 10 segundos de forma no bloqueante
+    unsigned long now = millis();
+    if (_lastReconnectAttempt == 0 || (now - _lastReconnectAttempt >= 10000)) {
+        _lastReconnectAttempt = now;
+        String ssid = hasSavedCredentials() ? getSavedSSID() : getDefaultSSID();
+        String pass = hasSavedCredentials() ? getSavedPassword() : getDefaultPassword();
+        if (ssid.length() > 0) {
+            Serial.printf("[WiFi] Watchdog: Reintentando conexion automatica a '%s'...\n", ssid.c_str());
+            WiFi.disconnect();
+            delay(50);
+            WiFi.begin(ssid.c_str(), pass.c_str());
+        }
+    }
 }
 
 void WiFiConfig::disconnect() {

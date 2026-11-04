@@ -214,7 +214,10 @@ void setup() {
 }
 
 void loop() {
-  // 0. Inicializar servicios de red (NTP y WebServer) una sola vez al obtener IP real
+  // 0. Watchdog y reconexión autónoma de Wi-Fi
+  wifi.update();
+
+  // 0.1 Inicializar servicios de red (WebServer) una sola vez al obtener IP real
   static bool netServicesStarted = false;
   if (!netServicesStarted && wifi.isConnected()) {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
@@ -223,7 +226,27 @@ void loop() {
     Serial.printf("[WiFi] Conectado con exito. IP: %s\n", wifi.getLocalIP().c_str());
   }
 
-  // 0.1 Atender peticiones del servidor de capturas y control HTTP
+  // 0.2 Watchdog robusto de sincronización NTP en zona horaria CET/CEST
+  static bool timeSynced = false;
+  static unsigned long lastNtpRetry = 0;
+  if (!timeSynced && wifi.isConnected()) {
+    time_t n = time(nullptr);
+    struct tm *tmCheck = localtime(&n);
+    if (tmCheck->tm_year > 120) {
+      timeSynced = true;
+      Serial.println("[NTP] Hora sincronizada con exito en CET/CEST.");
+      calendar.syncGoogleCalendar(true);
+      if (currentView == VIEW_WEATHER) {
+        refreshCurrentView();
+      }
+    } else if (millis() - lastNtpRetry > 10000) {
+      lastNtpRetry = millis();
+      Serial.println("[NTP] Reintentando sincronizacion horaria CET/CEST...");
+      configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
+    }
+  }
+
+  // 0.3 Atender peticiones del servidor de capturas y control HTTP
   if (netServicesStarted) {
     screenServer.handleClient();
   }
@@ -244,6 +267,9 @@ void loop() {
   
   if (wifi.isConnected()) {
     weather.update(true);
+    if (weather.consumeNewData() && currentView == VIEW_WEATHER) {
+      refreshCurrentView();
+    }
     // Escalonar calendar update para que no compita simultáneamente con weather en DNS/TLS
     static unsigned long lastCalCheck = 0;
     if (millis() - lastCalCheck > 4000) {
@@ -390,7 +416,8 @@ void loop() {
       if (selectedSSID.length() > 0) {
         wifi.saveCredentials(selectedSSID, typedPassword);
       }
-      configTime(0, 0, "pool.ntp.org", "time.google.com");
+      configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
+      timeSynced = false;
       weather.update(true);              // Descarga inmediata de clima de Ávila
       calendar.syncGoogleCalendar(true); // Sincronización Google Calendar
       currentView = VIEW_WIFI_RESULT;
@@ -480,7 +507,7 @@ void handleTouchPoint(int touchX, int touchY) {
   // --- VISTA 0: PANTALLA PREDEFINIDA CLIMA & RADAR DESK (STANDBY) ---
   if (currentView == VIEW_WEATHER) {
     audio.playClick();
-    if (touchY >= 122) {
+    if (touchY >= 144) {
       currentView = VIEW_POMODORO;
     } else {
       currentView = VIEW_AGENDA;

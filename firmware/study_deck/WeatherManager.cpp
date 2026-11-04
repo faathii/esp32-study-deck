@@ -79,6 +79,7 @@ bool WeatherManager::fetchOpenMeteo() {
                 }
             }
 
+            _hasNewData = true;
             Serial.printf("[Weather] Datos recibidos: %.1f C, %d%% humedad, WMO %d\n",
                           _temperature, _humidity, _weatherCode);
             http.end();

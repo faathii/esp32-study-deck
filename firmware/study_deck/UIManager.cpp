@@ -220,95 +220,77 @@ void UIManager::drawWeatherView(const WeatherManager &weather,
                                     : "DESPEJADO",
                   112, 8, 1);
 
-  // Estado batería y wifi en la esquina superior derecha
-  int batPct = battery.getPercentage();
-  bool usb = (battery.getVoltage() < 0.5f);
+  // Estado batería y wifi en la esquina superior derecha (Honesto: sin 100% ficticio)
   char stBuf[32];
-  snprintf(stBuf, sizeof(stBuf), "%s %d%%%s", wifiConnected ? "WIFI" : "OFF",
-           batPct, usb ? " 5V" : "");
+  if (battery.hasBatterySense() && battery.getPercentage() >= 0) {
+    snprintf(stBuf, sizeof(stBuf), "%s  %d%%", wifiConnected ? "WIFI" : "OFF",
+             battery.getPercentage());
+  } else {
+    snprintf(stBuf, sizeof(stBuf), "%s  USB 5V", wifiConnected ? "WIFI" : "OFF");
+  }
   _tft.setTextDatum(TR_DATUM);
-  _tft.setTextColor(usb ? COLOR_ACCENT_EMERALD : COLOR_TEXT_SECONDARY,
-                    COLOR_BG);
+  _tft.setTextColor(COLOR_ACCENT_EMERALD, COLOR_BG);
   _tft.drawString(stBuf, 314, 7, 1);
   _tft.setTextDatum(TL_DATUM);
 
   _tft.drawFastHLine(52, 24, 262, COLOR_BORDER);
 
-  // 2. Módulo Atmosférico Hero (x: 52..314, y: 28..116, h: 88)
-  _tft.fillRoundRect(52, 28, 262, 88, 6, COLOR_CARD);
-  _tft.drawRoundRect(52, 28, 262, 88, 6, COLOR_BORDER);
+  // 2. Tarjeta Unificada Hero: Hora (HH:MM) + Clima + Fecha (x: 52..314, y: 28..140, h: 112)
+  _tft.fillRoundRect(52, 28, 262, 112, 6, COLOR_CARD);
+  _tft.drawRoundRect(52, 28, 262, 112, 6, COLOR_BORDER);
 
-  // Temperatura gigante (Font 7 o Font 6)
-  char tBuf[16];
-  if (weather.hasData()) {
-    snprintf(tBuf, sizeof(tBuf), "%.1f", weather.getTemperature());
-  } else {
-    snprintf(tBuf, sizeof(tBuf), "--.-");
-  }
-  _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-  int tW =
-      _tft.drawString(tBuf, 62, 38, 6); // Font 6: Números limpios y grandes
-  _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
-  _tft.drawString(" C", 62 + tW + 2, 42, 4);
-
-  // Subtítulo meteorológico con datos de Ávila
-  char wSub[40];
-  if (weather.hasData()) {
-    snprintf(wSub, sizeof(wSub), "%d%% HR  |  Viento: 8 km/h",
-             weather.getHumidity());
-  } else {
-    snprintf(wSub, sizeof(wSub), "Conectando estacion meteorologica...");
-  }
-  _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-  _tft.drawString(wSub, 62, 90, 1);
-
-  // Ilustración meteorológica a la derecha de la tarjeta
-  drawAppColorIcon(270, 68, 3);
-
-  // 3. Radar Académico UNED & Reloj Vivo (x: 52..314, y: 122..234, h: 112)
-  _tft.fillRoundRect(52, 122, 262, 112, 6, COLOR_CARD);
-  _tft.drawRoundRect(52, 122, 262, 112, 6, COLOR_BORDER);
-
-  // Reloj digital grande y fecha
+  // Renderizar hora y clima dentro de la tarjeta unificada
   updateWeatherViewClock(weather, calendar);
 
-  // Separador interno
-  _tft.drawFastHLine(58, 172, 250, COLOR_BORDER);
+  // Icono meteorológico a la derecha
+  drawAppColorIcon(288, 92, 3);
 
-  // Información de sesión académica o cuenta atrás de examen
+  // 3. Tarjeta Próxima Tarea / Examen UNED (x: 52..314, y: 144..234, h: 90)
+  _tft.fillRoundRect(52, 144, 262, 90, 6, COLOR_CARD);
+  _tft.drawRoundRect(52, 144, 262, 90, 6, COLOR_BORDER);
+
+  // Información de sesión académica o cuenta atrás de examen con tipografía grande (Font 2)
   CalendarEvent todaySession;
   bool hasSession = calendar.getTodayMainSession(todaySession);
   bool ongoing = calendar.isStudySessionOngoing();
 
   if (ongoing) {
-    _tft.fillRoundRect(56, 178, 254, 48, 4, 0x3800);
-    _tft.drawRoundRect(56, 178, 254, 48, 4, COLOR_ACCENT_CORAL);
-    _tft.setTextColor(COLOR_TEXT_PRIMARY, 0x3800);
-    _tft.drawString("SESION EN CURSO", 64, 184, 2);
-    _tft.setTextColor(COLOR_ACCENT_AMBER, 0x3800);
-    _tft.drawString(todaySession.timeRange + " | " +
-                        todaySession.title.substring(0, 20),
-                    64, 204, 1);
-  } else if (hasSession) {
-    _tft.fillCircle(64, 188, 3, COLOR_ACCENT_CYAN);
-    _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
-    _tft.drawString(todaySession.timeRange, 72, 180, 2);
+    _tft.fillCircle(62, 156, 3, COLOR_ACCENT_CORAL);
+    _tft.setTextColor(COLOR_ACCENT_CORAL, COLOR_CARD);
+    _tft.drawString("SESION EN CURSO", 70, 150, 2);
+
     _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-    _tft.drawString(todaySession.title.substring(0, 26), 72, 200, 1);
+    _tft.drawString(todaySession.title.substring(0, 28), 62, 174, 2);
+
+    _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
+    _tft.drawString(todaySession.timeRange, 62, 200, 2);
+  } else if (hasSession) {
+    _tft.fillCircle(62, 156, 3, COLOR_ACCENT_CYAN);
+    _tft.setTextColor(COLOR_ACCENT_CYAN, COLOR_CARD);
+    _tft.drawString("PROXIMA TAREA HOY", 70, 150, 2);
+
+    _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+    _tft.drawString(todaySession.title.substring(0, 28), 62, 174, 2);
+
+    _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
+    _tft.drawString(todaySession.timeRange, 62, 200, 2);
   } else {
     String examTitle;
     String countdown = calendar.getNextDeadlineCountdown(examTitle);
-    _tft.fillCircle(64, 188, 3, COLOR_ACCENT_CYAN);
+
+    _tft.fillCircle(62, 156, 3, COLOR_ACCENT_AMBER);
     _tft.setTextColor(COLOR_TEXT_MUTED, COLOR_CARD);
-    _tft.drawString("PROXIMO EXAMEN UNED", 72, 178, 1);
+    _tft.drawString("PROXIMO EXAMEN UNED", 70, 150, 2);
+
     _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-    _tft.drawString(examTitle.substring(0, 20), 72, 192, 2);
+    _tft.drawString(examTitle.substring(0, 28), 62, 174, 2);
+
     _tft.setTextColor(COLOR_ACCENT_CYAN, COLOR_CARD);
-    _tft.drawRightString(countdown, 304, 192, 2);
+    _tft.drawString(countdown, 62, 200, 2);
   }
 }
 
-void UIManager::updateWeatherViewClock(const WeatherManager & /*weather*/,
+void UIManager::updateWeatherViewClock(const WeatherManager &weather,
                                        CalendarManager & /*calendar*/) {
   time_t now = time(nullptr);
   struct tm *t = localtime(&now);
@@ -317,8 +299,8 @@ void UIManager::updateWeatherViewClock(const WeatherManager & /*weather*/,
   char dateBuf[48];
 
   if (t->tm_year > 120) {
-    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d:%02d", t->tm_hour, t->tm_min,
-             t->tm_sec);
+    // Solo hora y minuto (HH:MM), sin segundos
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", t->tm_hour, t->tm_min);
     const char *dias[7] = {"Domingo", "Lunes",   "Martes", "Miercoles",
                            "Jueves",  "Viernes", "Sabado"};
     const char *meses[12] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -326,18 +308,46 @@ void UIManager::updateWeatherViewClock(const WeatherManager & /*weather*/,
     snprintf(dateBuf, sizeof(dateBuf), "%s, %d %s %d", dias[t->tm_wday],
              t->tm_mday, meses[t->tm_mon], t->tm_year + 1900);
   } else {
-    snprintf(timeBuf, sizeof(timeBuf), "12:00:00");
+    snprintf(timeBuf, sizeof(timeBuf), "12:00");
     snprintf(dateBuf, sizeof(dateBuf), "Sincronizando hora NTP...");
   }
 
-  // Reloj digital limpio centrado en la parte superior del radar
-  _tft.fillRect(58, 128, 250, 40, COLOR_CARD);
+  // 1. Hora en Font 6 (números grandes y limpios)
+  _tft.fillRect(58, 32, 130, 44, COLOR_CARD);
   _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
-  _tft.drawString(timeBuf, 62, 130, 4);
+  _tft.drawString(timeBuf, 60, 34, 6);
 
-  // Fecha debajo de la hora
+  // 2. Temperatura y unidad en el lado derecho de la tarjeta (anclada a la derecha)
+  char tBuf[16];
+  if (weather.hasData()) {
+    snprintf(tBuf, sizeof(tBuf), "%.1f", weather.getTemperature());
+  } else {
+    snprintf(tBuf, sizeof(tBuf), "--.-");
+  }
+  _tft.fillRect(190, 32, 120, 44, COLOR_CARD);
+  _tft.setTextDatum(TR_DATUM);
+  _tft.setTextColor(COLOR_ACCENT_AMBER, COLOR_CARD);
+  _tft.drawString(" C", 306, 38, 4);
+  _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+  _tft.drawString(tBuf, 284, 34, 6);
+  _tft.setTextDatum(TL_DATUM);
+
+  // 3. Fecha en Font 2 (más grande y nítida)
+  _tft.fillRect(58, 78, 190, 20, COLOR_CARD);
+  _tft.setTextColor(COLOR_TEXT_PRIMARY, COLOR_CARD);
+  _tft.drawString(dateBuf, 60, 80, 2);
+
+  // 4. Subtítulo meteorológico (humedad y condición limpia sin '|')
+  char wSub[40];
+  if (weather.hasData()) {
+    snprintf(wSub, sizeof(wSub), "%d%% HR  -  %s",
+             weather.getHumidity(), weather.getConditionText().c_str());
+  } else {
+    snprintf(wSub, sizeof(wSub), "Estacion Avila");
+  }
+  _tft.fillRect(58, 104, 190, 16, COLOR_CARD);
   _tft.setTextColor(COLOR_TEXT_SECONDARY, COLOR_CARD);
-  _tft.drawString(dateBuf, 62, 154, 1);
+  _tft.drawString(wSub, 60, 106, 1);
   _tft.setTextDatum(TL_DATUM);
 }
 

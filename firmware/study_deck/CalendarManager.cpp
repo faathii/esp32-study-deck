@@ -568,15 +568,40 @@ int CalendarManager::getAgendaItems(AgendaListItem *outItems, int maxItems) cons
 
     // 2. Agregar Eventos sincronizados desde Google Calendar (o cargados en memoria)
     for (int i = 0; i < _eventCount && count < maxItems; i++) {
-        long dNum = (long)_events[i].year * 10000 + _events[i].month * 100 + _events[i].day;
+        int itemDay = _events[i].day;
+        int itemMon = _events[i].month;
+        int itemYear = _events[i].year;
+
+        // Proyectar eventos recurrentes a su próxima ocurrencia en las próximas semanas
+        if (_events[i].isRecurring) {
+            bool foundNext = false;
+            for (int dayOffset = 0; dayOffset < 28; dayOffset++) {
+                time_t checkTime = now + (dayOffset * 86400);
+                struct tm *ct = localtime(&checkTime);
+                int cd_y = (ct->tm_year > 120) ? (ct->tm_year + 1900) : 2026;
+                int cd_m = (ct->tm_year > 120) ? (ct->tm_mon + 1) : 11;
+                int cd_d = (ct->tm_year > 120) ? ct->tm_mday : (dayOffset + 1);
+                int cd_w = (ct->tm_year > 120) ? ct->tm_wday : ((dayOffset + 6) % 7);
+                if (_events[i].occursOnDate(cd_d, cd_m, cd_y, cd_w)) {
+                    itemDay = cd_d;
+                    itemMon = cd_m;
+                    itemYear = cd_y;
+                    foundNext = true;
+                    break;
+                }
+            }
+            if (!foundNext) continue;
+        }
+
+        long dNum = (long)itemYear * 10000 + itemMon * 100 + itemDay;
         if (dNum >= curDateNum || _events[i].year == 0) {
             char dBuf[16];
-            snprintf(dBuf, sizeof(dBuf), "%d %s", _events[i].day, mesesAbr[_events[i].month - 1]);
+            snprintf(dBuf, sizeof(dBuf), "%d %s", itemDay, mesesAbr[itemMon - 1]);
 
             struct tm dTm = {0};
-            dTm.tm_year = (_events[i].year > 1900) ? (_events[i].year - 1900) : (curY - 1900);
-            dTm.tm_mon  = _events[i].month - 1;
-            dTm.tm_mday = _events[i].day;
+            dTm.tm_year = (itemYear > 1900) ? (itemYear - 1900) : (curY - 1900);
+            dTm.tm_mon  = itemMon - 1;
+            dTm.tm_mday = itemDay;
             dTm.tm_hour = _events[i].startHour;
             dTm.tm_min  = _events[i].startMin;
             time_t targetT = mktime(&dTm);
@@ -598,9 +623,9 @@ int CalendarManager::getAgendaItems(AgendaListItem *outItems, int maxItems) cons
                 String(_events[i].location).length() > 0 ? String(_events[i].location) : "Google Calendar",
                 2, // 2 = Estudio
                 0x07FF, // Cian
-                _events[i].day,
-                _events[i].month,
-                _events[i].year
+                itemDay,
+                itemMon,
+                itemYear
             };
             count++;
         }

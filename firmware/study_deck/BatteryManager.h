@@ -20,11 +20,16 @@ public:
 
     float getVoltage() const { return _smoothedVoltage + _calOffset; }
     int getPercentage() const { return _percentage; }
-    int getRemainingCapacityMah() const { return (_percentage * BATTERY_CAPACITY_MAH) / 100; }
+    int getRemainingCapacityMah() const { 
+        if (_percentage < 0) return BATTERY_CAPACITY_MAH;
+        return (_percentage * BATTERY_CAPACITY_MAH) / 100; 
+    }
     float getEstimatedHoursLeft() const;
     bool isCharging() const { return _isCharging; }
-    bool isLow() const { return _percentage <= 20; }
-    bool isCritical() const { return _percentage <= 10; }
+    bool isUsbPowered() const { return _isUsbPowered; }
+    bool hasBatterySense() const { return _hasBatterySense; }
+    bool isLow() const { return (_hasBatterySense && _percentage <= 20); }
+    bool isCritical() const { return (_hasBatterySense && _percentage <= 10); }
     uint16_t getStatusColor() const; // Color TFT: Verde, Ámbar o Rojo
     String getFormattedText() const;
     String getRuntimeString() const;
@@ -35,9 +40,11 @@ public:
 
 private:
     uint8_t _pin;
-    float _smoothedVoltage = 3.95f;
-    int _percentage = 85;
+    float _smoothedVoltage = 0.0f;
+    int _percentage = -1; // -1 = USB 5V fijo
     bool _isCharging = false;
+    bool _isUsbPowered = true;
+    bool _hasBatterySense = false;
     unsigned long _lastReadTime = 0;
     float _calOffset = 0.0f;
     Preferences _prefs;

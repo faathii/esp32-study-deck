@@ -53,6 +53,7 @@ public:
     // Conexión
     void startConnect(const String &ssid, const String &password);
     WiFiConnectStatus checkConnectStatus();
+    void update(); // Watchdog de reconexión automática en segundo plano
     void disconnect();
 
     bool isConnected() const { 
@@ -69,6 +70,7 @@ private:
     int _networkCount = 0;
     DiscoveredNetwork _networks[16]; // Hasta 16 redes encontradas
     unsigned long _connectStartTime = 0;
+    unsigned long _lastReconnectAttempt = 0;
 };
 
 #endif // WIFI_CONFIG_H
