@@ -63,6 +63,9 @@ bool screenDimmed = false;
 int agendaScrollOffset = 0;
 int selectedAgendaIndex = -1;
 
+// Estilo de pantalla predeterminada Desk / Standby (0=Minimal, 1=Cyberdeck, 2=Analogico, 3=Dashboard, 4=Zen)
+int deskStyle = 0;
+
 // Rastreador de alarma para evitar repetición en el mismo minuto
 int lastAlarmMinute = -1;
 
@@ -118,7 +121,7 @@ void refreshCurrentView() {
     break;
   case VIEW_SETTINGS:
     ui.drawSettingsView(wifi, battery, currentBrightness, autoBrightness,
-                        audio.isMuted(), timeoutMinutes);
+                        audio.isMuted(), timeoutMinutes, deskStyle);
     break;
   case VIEW_INFO:
     ui.drawInfoView(battery, storage, pomodoro, wifi.isConnected());
@@ -167,7 +170,10 @@ String getSystemStatusJson() {
   json += "\"gcal_synced\":" + String(calendar.isSynced() ? "true" : "false") + ",";
   json += "\"gcal_status\":\"" + calendar.getGoogleCalendarStatus() + "\",";
   json += "\"last_sync\":\"" + calendar.getLastSyncString() + "\",";
-  json += "\"event_count\":" + String(calendar.getEventCount());
+  json += "\"event_count\":" + String(calendar.getEventCount()) + ",";
+  const char *styles[5] = {"Minimalista", "Cyberdeck", "Analogico", "Dashboard UNED", "Zen Clima"};
+  json += "\"desk_style\":" + String(deskStyle) + ",";
+  json += "\"desk_style_name\":\"" + String(styles[deskStyle % 5]) + "\"";
   json += "}";
   return json;
 }
@@ -203,8 +209,13 @@ void setup() {
   // 5. Inicializar Wi-Fi
   wifi.begin();
 
-  // 6. Inicializar pantalla táctil y mostrar la vista predefinida (Clima &
-  // Reloj Desk)
+  // 6. Cargar estilo de escritorio guardado e inicializar UI y táctil
+  Preferences deskPrefs;
+  deskPrefs.begin("studydeck", true);
+  deskStyle = deskPrefs.getInt("desk_style", 0);
+  deskPrefs.end();
+  ui.setDeskStyle(deskStyle);
+
   ui.begin();
   touch.begin();
 
@@ -773,7 +784,12 @@ void handleTouchPoint(int touchX, int touchY) {
           if (touchX >= 52 && touchX <= 178) {
             currentView = VIEW_BATTERY;
           } else if (touchX >= 188 && touchX <= 314) {
-            currentView = VIEW_INFO;
+            deskStyle = (deskStyle + 1) % 5;
+            Preferences prefs;
+            prefs.begin("studydeck", false);
+            prefs.putInt("desk_style", deskStyle);
+            prefs.end();
+            ui.setDeskStyle(deskStyle);
           }
           refreshCurrentView();
           return;

@@ -64,6 +64,9 @@ public:
     void drawAppColorIcon(int cx, int cy, int appType);
 
     // --- 1. PANTALLA INICIAL PREDEFINIDA: ESTACIÓN CLIMA & RELOJ DESK (STANDBY) ---
+    void setDeskStyle(int style) { _deskStyle = (style >= 0) ? (style % 5) : 0; }
+    int getDeskStyle() const { return _deskStyle; }
+
     void drawWeatherView(const WeatherManager &weather, CalendarManager &calendar, 
                          const BatteryManager &battery, bool wifiConnected);
     void updateWeatherViewClock(const WeatherManager &weather, CalendarManager &calendar);
@@ -114,7 +117,7 @@ public:
 
     // --- 10. APLICACIÓN AJUSTES DEL SISTEMA ---
     void drawSettingsView(const WiFiConfig &wifi, const BatteryManager &battery, 
-                          int brightness, bool autoBrightness, bool soundMuted, int timeoutMinutes);
+                          int brightness, bool autoBrightness, bool soundMuted, int timeoutMinutes, int deskStyle = 0);
     int handleSettingsTouch(int x, int y, bool *outToggleAuto, bool *outBriDown, bool *outBriUp, 
                            bool *outToggleMute, bool *outTimeoutToggle, bool *outNightClock, bool *outOpenWifi, bool *outBack);
 
@@ -153,6 +156,24 @@ private:
     void drawCountdown(const PomodoroEngine &engine);
     void drawProgressBar(const PomodoroEngine &engine);
     void drawActionButtons(const PomodoroEngine &engine);
+
+    int _deskStyle = 0; // 0=Minimalista, 1=Cyberdeck, 2=Analogico, 3=Dashboard UNED, 4=Zen Clima
+
+    // Los 5 modelos de pantalla de escritorio predeterminada
+    void drawDeskMinimal(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    void updateDeskMinimalClock(const WeatherManager &weather, CalendarManager &calendar);
+
+    void drawDeskCyberdeck(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    void updateDeskCyberdeckClock(const WeatherManager &weather, CalendarManager &calendar);
+
+    void drawDeskAnalog(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    void updateDeskAnalogClock(const WeatherManager &weather, CalendarManager &calendar);
+
+    void drawDeskDashboard(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    void updateDeskDashboardClock(const WeatherManager &weather, CalendarManager &calendar);
+
+    void drawDeskZen(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    void updateDeskZenClock(const WeatherManager &weather, CalendarManager &calendar);
 };
 
 #endif // UI_MANAGER_H
