@@ -63,7 +63,7 @@ bool screenDimmed = false;
 int agendaScrollOffset = 0;
 int selectedAgendaIndex = -1;
 
-// Estilo de pantalla predeterminada Desk / Standby (0=Minimal, 1=Cyberdeck, 2=Analogico, 3=Dashboard, 4=Zen)
+// Estilo de pantalla predeterminada Desk / Standby (0=Minimal, 1=Cyberdeck, 2=Analogico, 3=Dashboard, 4=Flip Clock)
 int deskStyle = 0;
 
 // Rastreador de alarma para evitar repetición en el mismo minuto
@@ -171,7 +171,7 @@ String getSystemStatusJson() {
   json += "\"gcal_status\":\"" + calendar.getGoogleCalendarStatus() + "\",";
   json += "\"last_sync\":\"" + calendar.getLastSyncString() + "\",";
   json += "\"event_count\":" + String(calendar.getEventCount()) + ",";
-  const char *styles[5] = {"Minimalista", "Cyberdeck", "Analogico", "Dashboard UNED", "Zen Clima"};
+  const char *styles[5] = {"Minimalista", "Cyberdeck", "Analogico", "Dashboard UNED", "Flip Clock"};
   json += "\"desk_style\":" + String(deskStyle) + ",";
   json += "\"desk_style_name\":\"" + String(styles[deskStyle % 5]) + "\"";
   json += "}";

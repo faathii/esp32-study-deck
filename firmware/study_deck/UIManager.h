@@ -157,7 +157,7 @@ private:
     void drawProgressBar(const PomodoroEngine &engine);
     void drawActionButtons(const PomodoroEngine &engine);
 
-    int _deskStyle = 0; // 0=Minimalista, 1=Cyberdeck, 2=Analogico, 3=Dashboard UNED, 4=Zen Clima
+    int _deskStyle = 0; // 0=Minimalista, 1=Cyberdeck, 2=Analogico, 3=Dashboard UNED, 4=Flip Clock
 
     // Los 5 modelos de pantalla de escritorio predeterminada
     void drawDeskMinimal(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
@@ -172,8 +172,8 @@ private:
     void drawDeskDashboard(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
     void updateDeskDashboardClock(const WeatherManager &weather, CalendarManager &calendar);
 
-    void drawDeskZen(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
-    void updateDeskZenClock(const WeatherManager &weather, CalendarManager &calendar);
+    void drawDeskFlipClock(const WeatherManager &weather, CalendarManager &calendar, const BatteryManager &battery, bool wifiConnected);
+    void updateDeskFlipClock(const WeatherManager &weather, CalendarManager &calendar);
 };
 
 #endif // UI_MANAGER_H
